@@ -5,7 +5,7 @@ import           Snap.Snaplet (Handler)
 import           Snap.Snaplet.Heist
 import           Heist
 import qualified Heist.Interpreted as I
-import qualified Main
+import {-# SOURCE #-} Main
 
 data Post = Post {
   postId 	::	Integer,
@@ -16,13 +16,13 @@ data Post = Post {
 posts :: [Post]
 posts = [Post {postId = 1, message = "hi"},Post{postId = 2,message = "master"} ]
 
-postsHandler :: Handler Hashkitter Hashkitter ()
+postsHandler :: Handler Haskitter Haskitter ()
 postsHandler = renderWithSplices "index" allPostsSplices
 
-allPostsSplices :: Splices (SnapletISplice Hashkitter)
+allPostsSplices :: Splices (SnapletISplice Haskitter)
 allPostsSplices = "posts" ## (renderPosts posts)
 
-renderPosts :: [Post] -> SnapletISplice Hashkitter
+renderPosts :: [Post] -> SnapletISplice Haskitter
 renderPosts = I.mapSplices $ I.runChildrenWith . postSplices
 
 postSplices :: Monad m => Post -> Splices (I.Splice m)
