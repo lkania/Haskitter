@@ -8,7 +8,6 @@ import qualified Data.Text as T
 import           Snap.Snaplet.Heist
 import           Heist
 import qualified Heist.Interpreted as I
---import qualified Post
 
 -- | The Memoise type identifies our application and holds anything our snaplet needs to function.
 data Haskitter
@@ -36,6 +35,8 @@ main = do
   (_, site, _) <- runSnaplet Nothing hashkitterInit -- Initialize a Memoise snaplet
   quickHttpServe site -- Start the Snap server
 
+
+-- We shoudl take all this to an external module
 
 data Post = Post {
   postId 	::	Integer,
