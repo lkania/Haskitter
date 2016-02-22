@@ -1,0 +1,11 @@
+<html>
+	<body>
+		<table>
+			<posts>
+				<tr>
+					<td><postMessage/></td>
+				</tr>
+			</posts>
+		</table>
+	</body>
+</html>
