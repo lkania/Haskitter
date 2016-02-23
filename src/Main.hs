@@ -1,61 +1,51 @@
 module Main(Haskitter,main) where
 
 import Snap
-import Snap.Snaplet.Heist
 import Control.Lens
+import Snap.Snaplet
 import Snap.Snaplet (Handler)
-import qualified Data.Text as T
-import           Snap.Snaplet.Heist
-import           Heist
-import qualified Heist.Interpreted as I
+import Snap.Snaplet.PostgresqlSimple
+import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.List
+import Control.Applicative
+import Database.PostgreSQL.Simple.FromRow
+import Snap.Extras
+import Data.Aeson
+import GHC.Generics
 
 -- | The Memoise type identifies our application and holds anything our snaplet needs to function.
-data Haskitter
-  = Haskitter { _heist :: Snaplet (Heist Haskitter)
-            }
+data Haskitter = Haskitter
+    { _pg :: Snaplet Postgres }
+
 makeLenses ''Haskitter
-
-instance HasHeist Haskitter where
-	heistLens = subSnaplet heist
-
--- | The indexHandler will be invoked whenever someone accesses the root URL, "/".
-indexHandler :: Handler Haskitter Haskitter ()
-indexHandler = render "index"
 
 -- | Build a new Memoise snaplet.
 hashkitterInit :: SnapletInit Haskitter Haskitter
 hashkitterInit = makeSnaplet "hashkitterInit" "Haskell twitter, 'cause YOLO" Nothing $ do
-	h <- nestSnaplet "heist" heist $ heistInit "templates"
-	addRoutes [("", postsHandler)]
-	return $ Haskitter { _heist = h
-}
+  p <- nestSnaplet "pg" pg pgsInit
+  addRoutes [("/posts", postsIndexHandler)]
+  return $ Haskitter { _pg = p }
 
 main :: IO ()
 main = do
   (_, site, _) <- runSnaplet Nothing hashkitterInit -- Initialize a Memoise snaplet
   quickHttpServe site -- Start the Snap server
 
-
 -- We shoudl take all this to an external module
 
 data Post = Post {
-  postId 	::	Integer,
-  message	::	T.Text
-  } deriving (Eq, Show, Read)
+  message	::	String
+  } deriving (Show)
 
---local database
-posts :: [Post]
-posts = [Post {postId = 1, message = "hi"},Post{postId = 2,message = "master"} ]
+instance FromRow Post where
+  fromRow = Post <$> field
 
-postsHandler :: Handler Haskitter Haskitter ()
-postsHandler = renderWithSplices "index" allPostsSplices
+instance ToJSON Post where
+  toJSON (Post message) =
+    object ["message" Data.Aeson..= message]
 
-allPostsSplices :: Splices (SnapletISplice Haskitter)
-allPostsSplices = "posts" ## (renderPosts posts)
-
-renderPosts :: [Post] -> SnapletISplice Haskitter
-renderPosts = I.mapSplices $ I.runChildrenWith . postSplices
-
-postSplices :: Monad m => Post -> Splices (I.Splice m)
-postSplices post = do
-	"postMessage" ## I.textSplice (message post)
+postsIndexHandler :: Handler Haskitter Haskitter ()
+postsIndexHandler = do
+  allPosts <- with pg $ query_ "SELECT * FROM posts"
+  writeJSON (allPosts :: [Post])
