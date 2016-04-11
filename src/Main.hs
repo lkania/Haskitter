@@ -47,5 +47,5 @@ instance ToJSON Post where
 
 postsIndexHandler :: Handler Haskitter Haskitter ()
 postsIndexHandler = do
-  allPosts <- with pg $ query_ "SELECT * FROM posts"
+  allPosts <- with pg $ query_ "SELECT message FROM posts"
   writeJSON (allPosts :: [Post])
