@@ -24,7 +24,7 @@ makeLenses ''Haskitter
 hashkitterInit :: SnapletInit Haskitter Haskitter
 hashkitterInit = makeSnaplet "hashkitterInit" "Haskell twitter, 'cause YOLO" Nothing $ do
   p <- nestSnaplet "pg" pg pgsInit
-  addRoutes [("/posts", postsIndexHandler)]
+  addRoutes [("/posts", postsIndexHandler),("/users", usersIndexHandler)]
   return $ Haskitter { _pg = p }
 
 main :: IO ()
@@ -34,9 +34,12 @@ main = do
 
 -- We shoudl take all this to an external module
 
-data Post = Post {
-  message	::	String
-  } deriving (Show)
+data Post = Post { message	::	String } 
+
+data User = User { email :: String, name :: String, password_digest :: String }
+
+instance FromRow User where
+  fromRow = User <$> field <*> field <*> field
 
 instance FromRow Post where
   fromRow = Post <$> field
@@ -45,7 +48,18 @@ instance ToJSON Post where
   toJSON (Post message) =
     object ["message" Data.Aeson..= message]
 
+instance ToJSON User where
+  toJSON(User email name password_digest) =
+    object ["name" Data.Aeson..= name]
+
+
 postsIndexHandler :: Handler Haskitter Haskitter ()
 postsIndexHandler = do
   allPosts <- with pg $ query_ "SELECT message FROM posts"
   writeJSON (allPosts :: [Post])
+
+-- name is a reserved keyword in postgreSQL, hence it must be escaped in order to do a quer
+usersIndexHandler :: Handler Haskitter Haskitter ()
+usersIndexHandler = do
+  allUsers <- with pg $ query_ "SELECT email,\"name\",password_digest FROM users"
+  writeJSON (allUsers :: [User])
