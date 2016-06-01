@@ -29,7 +29,8 @@ executable haskitter
                  snaplet-postgresql-simple >= 0.4     && < 0.7,
                  postgresql-simple,
                  snap-extras,
-                 aeson 
+                 aeson,
+                 bytestring
   GHC-options: -threaded -O2
   default-extensions: OverloadedStrings
             , TemplateHaskell
