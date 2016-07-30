@@ -26,6 +26,7 @@ import Users
 import Posts
 import Login
 import Helpers
+import Feed
 
 ------------------------------------------------------------------------------
 -- | The application's routes.
@@ -36,6 +37,7 @@ routes = [
       , ("/user/:id",userHandler)
       , ("/login",method POST loginHandler)
       , ("/logincheck",loginCheckHandler)
+      , ("/feed/:id",method GET feedHandler)
       ]
 
 ------------------------------------------------------------------------------
@@ -67,7 +69,7 @@ userHandler = do
 userHandler' :: BS.ByteString -> AppHandler ()
 userHandler' user_id = do
   user <- (getUserById $ (byteStringToString user_id))
-  writeLBS . encode $ (user :: User) 
+  writeLBS . encode $ user
 
 -- The parameter mapping decoded from the POST body. Note that Snap only auto-decodes POST request bodies when the request's Content-Type is application/x-www-form-urlencoded. For multipart/form-data use handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams
@@ -84,3 +86,14 @@ loginHandler' user_email user_password_digest = do
 
 loginCheckHandler :: AppHandler ()
 loginCheckHandler = userIsLoged >>= (\value -> if value then writeBS "Correctly Loged" else writeBS "Not Loged")
+
+feedHandler :: AppHandler ()
+feedHandler = do
+  modifyResponse $ setHeader "Content-Type" "application/json"
+  user_id <- getParam "id"
+  maybe (writeBS "User does not exist") feedHandler' user_id
+
+feedHandler' :: BS.ByteString -> AppHandler ()
+feedHandler' user_id = do
+  feed <- getFollowedPostsByUserId (byteStringToString user_id)
+  writeLBS . encode $ feed
