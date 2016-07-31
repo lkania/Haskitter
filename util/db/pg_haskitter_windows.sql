@@ -15,7 +15,7 @@ CREATE TABLE users (
   id SERIAL NOT NULL,
   email VARCHAR(64) NOT NULL,
   name VARCHAR(70) NOT NULL,
-  password_digest VARCHAR NOT NULL,
+  password VARCHAR NOT NULL,
   created_at TIMESTAMP without time zone NOT NULL,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );

@@ -30,7 +30,8 @@ Executable haskitter
                  snaplet-postgresql-simple  == 0.6.0.4,
                  postgresql-simple          == 0.5.1.2,
                  snap-extras                == 0.11.0.2,
-                 aeson                      == 0.10.0.0 
+                 aeson                      == 0.10.0.0,
+                 time                       == 1.5.0.1
 
   GHC-options: -threaded -O2
   default-extensions: 

@@ -14,11 +14,8 @@ import            Control.Lens
 import            Snap
 import            Snap.Snaplet
 import            Snap.Snaplet.PostgresqlSimple
-import            Snap.Snaplet.Session
 import            Snap.Extras
 import            Data.Aeson
-import            Snap.Snaplet.Session
-import            Snap.Snaplet.Session.Backends.CookieSession
 
 ------------------------------------------------------------------------------
 import Application
@@ -35,9 +32,8 @@ routes = [
         ("/posts", postsIndexHandler)
       , ("/users", usersIndexHandler)
       , ("/user/:id",userHandler)
-      , ("/login",method POST loginHandler)
-      , ("/logincheck",loginCheckHandler)
       , ("/feed/:id",method GET feedHandler)
+      , ("/post",method POST $ loginHandler postHandler)
       ]
 
 ------------------------------------------------------------------------------
@@ -45,9 +41,8 @@ routes = [
 hashkitterInit :: SnapletInit Haskitter Haskitter
 hashkitterInit = makeSnaplet "hashkitterInit" "Haskell twitter, 'cause YOLO" Nothing $ do
   p <- nestSnaplet "pg" pg pgsInit
-  s <- nestSnaplet "sess" sess $ initCookieSessionManager "site_key.txt" "sess" (Just 3600)
   addRoutes routes 
-  return $ Haskitter { _pg = p, _sess = s }
+  return $ Haskitter { _pg = p}
 
 postsIndexHandler :: AppHandler ()
 postsIndexHandler = do
@@ -73,19 +68,22 @@ userHandler' user_id = do
 
 -- The parameter mapping decoded from the POST body. Note that Snap only auto-decodes POST request bodies when the request's Content-Type is application/x-www-form-urlencoded. For multipart/form-data use handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams
-loginHandler :: AppHandler ()
-loginHandler = do 
+loginHandler :: (User -> AppHandler ()) -> AppHandler ()
+loginHandler appHandler = do 
   user_email <- getParam "user_email"
-  user_password_digest <- getParam "user_password_digest"
-  maybe (writeBS "No email") (\u_email -> maybe (writeBS "No password") (loginHandler' u_email) user_password_digest) user_email
+  user_password <- getParam "user_password"
+  maybe_user <- checkParam user_email (\u_email -> checkParam user_password (\u_password -> loginHandler' u_email u_password) "No password") "No email"
+  case maybe_user of
+    Nothing -> return ()
+    Just user -> appHandler user
 
-loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler ()
-loginHandler' user_email user_password_digest = do
-  result <- login (byteStringToString user_email) (byteStringToString user_password_digest)
-  if result then writeBS "Loged!" else writeBS "Login fail"  
+invalid_parameter :: BS.ByteString -> AppHandler (Maybe a)
+invalid_parameter message = do
+  writeBS message
+  return Nothing
 
-loginCheckHandler :: AppHandler ()
-loginCheckHandler = userIsLoged >>= (\value -> if value then writeBS "Correctly Loged" else writeBS "Not Loged")
+loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler (Maybe User)
+loginHandler' user_email user_password = login (byteStringToString user_email) (byteStringToString user_password)
 
 feedHandler :: AppHandler ()
 feedHandler = do
@@ -97,3 +95,10 @@ feedHandler' :: BS.ByteString -> AppHandler ()
 feedHandler' user_id = do
   feed <- getFollowedPostsByUserId (byteStringToString user_id)
   writeLBS . encode $ feed
+
+postHandler :: User -> AppHandler ()
+postHandler user = do
+  writeLBS "hello"
+
+checkParam :: Maybe BS.ByteString -> (BS.ByteString -> AppHandler (Maybe a)) -> BS.ByteString -> AppHandler (Maybe a)
+checkParam param handler error_message = maybe (invalid_parameter error_message) handler param
