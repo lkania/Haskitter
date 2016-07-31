@@ -25,7 +25,7 @@ instance ToJSON User where
 
 -- name is a reserved keyword in postgreSQL, hence it must be escaped in order to do a quer
 getUsers :: AppHandler [User]
-getUsers = with pg $ query_ "SELECT id,email,\"name\",password_digest FROM users"
+getUsers = with pg $ query_ "SELECT id,email,\"name\",password FROM users"
 
 getUserById :: String -> AppHandler (Maybe User)
 getUserById user_id = getUserByFunction $ (\user -> show (uid user) == user_id)
@@ -45,3 +45,8 @@ subscribe :: User -> User -> AppHandler ()
 subscribe follower followed = do
   with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)
   return ()
+
+signUp :: String -> String -> String -> AppHandler ()
+signUp user_email user_name user_password = do
+  with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)
+  return () 

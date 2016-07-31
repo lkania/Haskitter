@@ -6,7 +6,7 @@
 
 ### Users
 
-|      id     |         email         |          name         |  password_digest  |          created_at         |
+|      id     |         email         |          name         |  password         |          created_at         |
 |:-----------:|:---------------------:|:---------------------:|:-----------------:|:---------------------------:|
 | [PK] serial | character varying(64) | character varying(70) | character varying | timestamp without time zone |
 

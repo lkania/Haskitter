@@ -9,6 +9,3 @@ import qualified  Data.Text.Encoding as E
 
 byteStringToString :: BS.ByteString -> String
 byteStringToString = T.unpack . E.decodeUtf8
-
-textToString :: T.Text -> String
-textToString = T.unpack
