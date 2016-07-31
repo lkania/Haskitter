@@ -20,5 +20,7 @@ import Helpers
 
 login :: String -> String -> AppHandler (Maybe User)
 login user_email user_password = do
-  user <- getUserByEmail user_email
-  return $ if checkPassword user user_password then Just user else Nothing
+  maybe_user <- getUserByEmail user_email
+  return $ case maybe_user of
+    Nothing -> Nothing
+    Just user -> if checkPassword user user_password then Just user else Nothing

@@ -12,8 +12,7 @@ import Snap.Snaplet.PostgresqlSimple
 ------------------------------------------------------------------------------
 -- | The Haskitter type identifies our application and holds anything our snaplet needs to function.
 data Haskitter = Haskitter
-    { _pg   :: Snaplet Postgres
-    }
+    { _pg   :: Snaplet Postgres }
 
 makeLenses ''Haskitter
 
