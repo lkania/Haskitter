@@ -29,11 +29,12 @@ import Feed
 -- | The application's routes.
 routes :: [(BS.ByteString, AppHandler ())]
 routes = [
-        ("/posts", postsIndexHandler)
-      , ("/users", usersIndexHandler)
-      , ("/user/:id",userHandler)
-      , ("/feed/:id",method GET feedHandler)
-      , ("/post",method POST $ loginHandler postHandler)
+        ( "/posts"     ,  method GET   postsIndexHandler         )
+      , ( "/users"     ,  method GET    usersIndexHandler         )
+      , ( "/user/:id"  ,  method GET    userHandler               )
+      , ( "/feed/:id"  ,  method GET    feedHandler               )
+      , ( "/post"      ,  method POST $ loginHandler postHandler  )
+      --, ( "/subscribe" ,  method POST $ subscribeHandler          )
       ]
 
 ------------------------------------------------------------------------------
@@ -72,18 +73,22 @@ loginHandler :: (User -> AppHandler ()) -> AppHandler ()
 loginHandler appHandler = do 
   user_email <- getParam "user_email"
   user_password <- getParam "user_password"
-  maybe_user <- checkParam user_email (\u_email -> checkParam user_password (\u_password -> loginHandler' u_email u_password) "No password") "No email"
+  maybe_user <- checkParam user_email (\u_email -> checkParam user_password (\u_password -> loginHandler' u_email u_password) "No password" (return Nothing)) "No email" (return Nothing)
   case maybe_user of
     Nothing -> return ()
     Just user -> appHandler user
 
-invalid_parameter :: BS.ByteString -> AppHandler (Maybe a)
+invalid_parameter :: BS.ByteString -> AppHandler ()
 invalid_parameter message = do
   writeBS message
-  return Nothing
 
 loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler (Maybe User)
-loginHandler' user_email user_password = login (byteStringToString user_email) (byteStringToString user_password)
+loginHandler' user_email user_password = do
+  maybe_user <- login (byteStringToString user_email) (byteStringToString user_password)
+  case maybe_user of
+    Nothing -> writeBS "Incorrect login"
+    Just user -> return ()
+  return maybe_user  
 
 feedHandler :: AppHandler ()
 feedHandler = do
@@ -98,7 +103,8 @@ feedHandler' user_id = do
 
 postHandler :: User -> AppHandler ()
 postHandler user = do
-  writeLBS "hello"
+  message <- getParam "message"
+  checkParam message (\m -> post (byteStringToString m) user) "No message" (return ())
 
-checkParam :: Maybe BS.ByteString -> (BS.ByteString -> AppHandler (Maybe a)) -> BS.ByteString -> AppHandler (Maybe a)
-checkParam param handler error_message = maybe (invalid_parameter error_message) handler param
+checkParam :: Maybe BS.ByteString -> (BS.ByteString -> AppHandler a) -> BS.ByteString -> AppHandler a -> AppHandler a
+checkParam param handler error_message return_value = maybe (do invalid_parameter error_message; return_value) handler param

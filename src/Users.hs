@@ -8,7 +8,6 @@ import Snap
 import Snap.Snaplet
 import Snap.Snaplet.PostgresqlSimple
 import Data.Aeson
-import Snap.Snaplet.Session
 
 ------------------------------------------------------------------------------
 import Application

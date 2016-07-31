@@ -15,6 +15,7 @@ import Data.Time.LocalTime
 import Application
 import Feed
 import Utils
+import Users
 
 ------------------------------------------------------------------------------
 
@@ -46,5 +47,7 @@ getFollowedPostsByUserId userId = do
 ------------------------------------------------------------------------------
 -- | Writing operations
 
-post :: String -> Int -> LocalTime -> AppHandler GHC.Int.Int64
-post message user_id timeStamp= with pg $ execute "INSERT INTO post (message,user_id,created_at) VALUES (?,?,?)" (message,user_id,timeStamp)
+post :: String -> User -> AppHandler ()
+post message user = do
+  with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)
+  return ()

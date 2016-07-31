@@ -16,7 +16,7 @@ CREATE TABLE users (
   email VARCHAR(64) NOT NULL,
   name VARCHAR(70) NOT NULL,
   password VARCHAR NOT NULL,
-  created_at TIMESTAMP without time zone NOT NULL,
+  created_at TIMESTAMP without time zone NOT NULL default CURRENT_TIMESTAMP,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
@@ -29,7 +29,7 @@ CREATE TABLE posts (
   id SERIAL NOT NULL,
   message VARCHAR(140) NOT NULL,
   user_id INTEGER NOT NULL,
-  created_at TIMESTAMP without time zone NOT NULL,
+  created_at TIMESTAMP without time zone NOT NULL default CURRENT_TIMESTAMP,
   CONSTRAINT posts_pkey PRIMARY KEY (id),
   CONSTRAINT fk_posts_users FOREIGN KEY (user_id)
     REFERENCES users (id) MATCH SIMPLE
@@ -45,7 +45,7 @@ CREATE TABLE relationships (
   id SERIAL NOT NULL,
   follower_id INTEGER,
   followed_id INTEGER,
-  created_at TIMESTAMP without time zone NOT NULL,
+  created_at TIMESTAMP without time zone NOT NULL default CURRENT_TIMESTAMP,
   CONSTRAINT relationships_pkey PRIMARY KEY (id),
   CONSTRAINT fk_relationships_follower_id_users FOREIGN KEY (follower_id)
     REFERENCES users (id) MATCH SIMPLE
