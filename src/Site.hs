@@ -29,12 +29,12 @@ import Feed
 -- | The application's routes.
 routes :: [(BS.ByteString, AppHandler ())]
 routes = [
-        ( "/posts"     ,  method GET   postsIndexHandler         )
-      , ( "/users"     ,  method GET    usersIndexHandler         )
-      , ( "/user/:id"  ,  method GET    userHandler               )
-      , ( "/feed/:id"  ,  method GET    feedHandler               )
-      , ( "/post"      ,  method POST $ loginHandler postHandler  )
-      --, ( "/subscribe" ,  method POST $ subscribeHandler          )
+        ( "/posts"     ,  method GET    postsIndexHandler               )
+      , ( "/users"     ,  method GET    usersIndexHandler               )
+      , ( "/user/:id"  ,  method GET    userHandler                     )
+      , ( "/feed/:id"  ,  method GET    feedHandler                     )
+      , ( "/post"      ,  method POST $ loginHandler postHandler        )
+      , ( "/follow"    ,  method POST $ loginHandler followHandler   )
       ]
 
 ------------------------------------------------------------------------------
@@ -64,8 +64,9 @@ userHandler = do
 
 userHandler' :: BS.ByteString -> AppHandler ()
 userHandler' user_id = do
-  user <- (getUserById $ (byteStringToString user_id))
-  writeLBS . encode $ user
+  maybe_user <- (getUserById $ (byteStringToString user_id))
+  checkParam maybe_user (\user -> writeLBS . encode $ user) "User does not exist" (return ())
+  
 
 -- The parameter mapping decoded from the POST body. Note that Snap only auto-decodes POST request bodies when the request's Content-Type is application/x-www-form-urlencoded. For multipart/form-data use handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams
@@ -85,10 +86,14 @@ invalid_parameter message = do
 loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler (Maybe User)
 loginHandler' user_email user_password = do
   maybe_user <- login (byteStringToString user_email) (byteStringToString user_password)
-  case maybe_user of
-    Nothing -> writeBS "Incorrect login"
-    Just user -> return ()
-  return maybe_user  
+  ifNothingWrite maybe_user "Incorrect login"
+  
+ifNothingWrite :: Maybe a -> BS.ByteString -> AppHandler (Maybe a)
+ifNothingWrite maybe_var message = do
+  case maybe_var of
+    Nothing -> writeBS message
+    Just var -> return ()
+  return maybe_var
 
 feedHandler :: AppHandler ()
 feedHandler = do
@@ -106,5 +111,13 @@ postHandler user = do
   message <- getParam "message"
   checkParam message (\m -> post (byteStringToString m) user) "No message" (return ())
 
-checkParam :: Maybe BS.ByteString -> (BS.ByteString -> AppHandler a) -> BS.ByteString -> AppHandler a -> AppHandler a
+checkParam :: Maybe b -> (b -> AppHandler a) -> BS.ByteString -> AppHandler a -> AppHandler a
 checkParam param handler error_message return_value = maybe (do invalid_parameter error_message; return_value) handler param
+
+followHandler :: User -> AppHandler ()
+followHandler follower = do
+  followed_id <- getParam "followed_id"
+  maybe_followed <- checkParam followed_id (\f_id -> getUserById (byteStringToString f_id) >>= (\maybe_user -> ifNothingWrite maybe_user "User does not exist") ) "No id" (return Nothing)
+  case maybe_followed of
+    Nothing -> return ()
+    Just followed -> if uid follower == uid followed then invalid_parameter "You can't follow yourself" else subscribe follower followed
