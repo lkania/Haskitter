@@ -8,10 +8,14 @@ import Snap
 import Snap.Snaplet
 import Snap.Snaplet.PostgresqlSimple
 import Data.Aeson
+import GHC.Int
+import Data.Time.LocalTime
 
 ------------------------------------------------------------------------------
 import Application
 import Feed
+import Utils
+import Users
 
 ------------------------------------------------------------------------------
 
@@ -23,6 +27,9 @@ instance FromRow Post where
 instance ToJSON Post where
   toJSON (Post message user_id) =
     object ["message" Data.Aeson..= message]
+
+------------------------------------------------------------------------------
+-- | Reading operations
 
 getPosts :: AppHandler [Post]
 getPosts = with pg $ query_ "SELECT message,user_id FROM posts"
@@ -37,8 +44,10 @@ getFollowedPostsByUserId userId = do
   follows <- getFollowedsById userId
   concatAppHandlerList $ map (\follow -> getPostByUserId $ followed_id follow) follows
 
-concatAppHandler :: AppHandler [a] -> AppHandler [a] -> AppHandler [a]
-concatAppHandler m1 m2 = m1 >>= (\a -> m2 >>= (\b -> return $ a ++ b ))
+------------------------------------------------------------------------------
+-- | Writing operations
 
-concatAppHandlerList :: [AppHandler [a]] -> AppHandler [a]
-concatAppHandlerList = foldr (\x xs -> concatAppHandler x xs) (return [])
+post :: String -> User -> AppHandler ()
+post message user = do
+  with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)
+  return ()
