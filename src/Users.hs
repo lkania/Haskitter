@@ -8,6 +8,9 @@ import Snap
 import Snap.Snaplet
 import Snap.Snaplet.PostgresqlSimple
 import Data.Aeson
+import Database.PostgreSQL.Simple.FromRow
+import Database.PostgreSQL.Simple.ToRow
+import Database.PostgreSQL.Simple.ToField
 
 ------------------------------------------------------------------------------
 import Application
@@ -22,6 +25,9 @@ instance FromRow User where
 instance ToJSON User where
   toJSON(User uid email name password) =
     object ["name" Data.Aeson..= name, "id" Data.Aeson..= uid]
+
+instance ToRow Int where
+  toRow d = [toField d]
 
 -- name is a reserved keyword in postgreSQL, hence it must be escaped in order to do a quer
 getUsers :: AppHandler [User]
@@ -50,3 +56,8 @@ signUp :: String -> String -> String -> AppHandler ()
 signUp user_email user_name user_password = do
   with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)
   return () 
+
+delete :: User -> AppHandler ()
+delete user = do 
+  with pg $ execute "DELETE FROM users where id = ?" (uid user)
+  return ()

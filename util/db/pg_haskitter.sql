@@ -33,7 +33,7 @@ CREATE TABLE posts (
   CONSTRAINT posts_pkey PRIMARY KEY (id),
   CONSTRAINT fk_posts_users FOREIGN KEY (user_id)
     REFERENCES users (id) MATCH SIMPLE
-    ON UPDATE NO ACTION ON DELETE NO ACTION
+    ON UPDATE NO ACTION ON DELETE CASCADE
 );
 
 CREATE INDEX index_posts_on_user_id
@@ -49,10 +49,10 @@ CREATE TABLE relationships (
   CONSTRAINT relationships_pkey PRIMARY KEY (id),
   CONSTRAINT fk_relationships_follower_id_users FOREIGN KEY (follower_id)
     REFERENCES users (id) MATCH SIMPLE
-    ON UPDATE NO ACTION ON DELETE NO ACTION,
+    ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT fk_relationships_followed_id_users FOREIGN KEY (followed_id)
     REFERENCES users (id) MATCH SIMPLE
-    ON UPDATE NO ACTION ON DELETE NO ACTION
+    ON UPDATE NO ACTION ON DELETE CASCADE
 );
 
 CREATE INDEX index_relationships_on_followed_id
