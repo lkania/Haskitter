@@ -29,13 +29,14 @@ import Feed
 -- | The application's routes.
 routes :: [(BS.ByteString, AppHandler ())]
 routes = [
-        ( "/posts"     ,  method GET    postsIndexHandler               )
-      , ( "/users"     ,  method GET    usersIndexHandler               )
-      , ( "/user/:id"  ,  method GET    userHandler                     )
-      , ( "/feed/:id"  ,  method GET    feedHandler                     )
-      , ( "/post"      ,  method POST $ loginHandler postHandler        )
-      , ( "/follow"    ,  method POST $ loginHandler followHandler      )
-      , ( "/signup"    ,  method POST $ signUpHandler                   )
+        ( "/posts"     ,  method GET      postsIndexHandler               )
+      , ( "/users"     ,  method GET      usersIndexHandler               )
+      , ( "/user/:id"  ,  method GET      userHandler                     )
+      , ( "/feed/:id"  ,  method GET      feedHandler                     )
+      , ( "/post"      ,  method POST   $ loginHandler postHandler        )
+      , ( "/follow"    ,  method POST   $ loginHandler followHandler      )
+      , ( "/signup"    ,  method POST   $ signUpHandler                   )
+      , ( "/user/:id"  ,  method DELETE $ loginHandler deleteHandler      )
       ]
 
 ------------------------------------------------------------------------------
@@ -153,3 +154,18 @@ signUpHandler' user_email user_name user_password user_password_confirmation =
                                  case maybe_user of
                                    Just user -> return ()
                                    Nothing   -> signUp user_email user_name user_password ) 
+
+deleteHandler :: User -> AppHandler ()
+deleteHandler user = do
+  user_id <- getParam "id"
+  checkParam user_id "No id" (return ()) (\u_id ->
+   deleteHandler' user (byteStringToString u_id) )
+
+deleteHandler' :: User -> String -> AppHandler ()
+deleteHandler' user user_id =
+  if user_id /= (show $ uid user) then
+    do
+      writeBS "Id missmatch"
+      return ()
+  else
+    delete user   
