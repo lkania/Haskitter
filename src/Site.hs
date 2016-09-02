@@ -29,15 +29,15 @@ import Feed
 -- | The application's routes.
 routes :: [(BS.ByteString, AppHandler ())]
 routes = [
-        ( "/posts"            ,  method GET      postsIndexHandler               )
-      , ( "/postsWithUser"    ,  method GET      postsWitUserIndexHandler        )
-      , ( "/users"            ,  method GET      usersIndexHandler               )
-      , ( "/user/:id"         ,  method GET      userHandler                     )
-      , ( "/feed/:id"         ,  method GET      feedHandler                     )
-      , ( "/post"             ,  method POST   $ loginHandler postHandler        )
-      , ( "/follow"           ,  method POST   $ loginHandler followHandler      )
-      , ( "/signup"           ,  method POST   $ signUpHandler                   )
-      , ( "/user/:id"         ,  method DELETE $ loginHandler deleteHandler      )
+        ( "/posts"            ,  method GET    $ headersHandler postsIndexHandler               )
+      , ( "/postsWithUser"    ,  method GET    $ headersHandler postsWitUserIndexHandler        )
+      , ( "/users"            ,  method GET    $ headersHandler usersIndexHandler               )
+      , ( "/user/:id"         ,  method GET    $ headersHandler userHandler                     )
+      , ( "/feed/:id"         ,  method GET    $ headersHandler feedHandler                     )
+      , ( "/post"             ,  method POST   $ headersHandler $ loginHandler postHandler      )
+      , ( "/follow"           ,  method POST   $ headersHandler $ loginHandler followHandler    )
+      , ( "/signup"           ,  method POST   $ headersHandler signUpHandler                   )
+      , ( "/user/:id"         ,  method DELETE $ headersHandler $ loginHandler deleteHandler    )
       ]
 
 ------------------------------------------------------------------------------
@@ -60,13 +60,16 @@ postsWitUserIndexHandler = do
 
 usersIndexHandler :: AppHandler ()
 usersIndexHandler = do
-  modifyResponse $ setHeader "Content-Type" "application/json"
   users <- getUsers
   writeLBS . encode $ users
 
+headersHandler :: AppHandler () -> AppHandler ()
+headersHandler appHandler = do
+  modifyResponse $ setHeader "Content-Type" "application/json"
+  appHandler
+
 userHandler :: AppHandler ()
 userHandler = do
-  modifyResponse $ setHeader "Content-Type" "application/json"
   user_id <- getParam "id"
   maybe (writeBS "User does not exist") userHandler' user_id
 
@@ -74,7 +77,6 @@ userHandler' :: BS.ByteString -> AppHandler ()
 userHandler' user_id = do
   maybe_user <- (getUserById $ (byteStringToString user_id))
   checkParam maybe_user "User does not exist" (return ()) (\user -> writeLBS . encode $ user)
-  
 
 -- The parameter mapping decoded from the POST body. Note that Snap only auto-decodes POST request bodies when the request's Content-Type is application/x-www-form-urlencoded. For multipart/form-data use handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams
@@ -96,17 +98,16 @@ loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler (Maybe User)
 loginHandler' user_email user_password = do
   maybe_user <- login (byteStringToString user_email) (byteStringToString user_password)
   ifNothingWrite maybe_user "Incorrect login"
+  return maybe_user
   
-ifNothingWrite :: Maybe a -> BS.ByteString -> AppHandler (Maybe a)
+ifNothingWrite :: Maybe a -> BS.ByteString -> AppHandler ()
 ifNothingWrite maybe_var message = do
   case maybe_var of
     Nothing -> writeBS message
     Just var -> return ()
-  return maybe_var
 
 feedHandler :: AppHandler ()
 feedHandler = do
-  modifyResponse $ setHeader "Content-Type" "application/json"
   user_id <- getParam "id"
   maybe (invalid_parameter "User does not exist") feedHandler' user_id
 
@@ -128,7 +129,7 @@ followHandler follower = do
   followed_id     <- getParam "followed_id"
   maybe_followed  <- checkParam  followed_id "No id" (return Nothing) (\f_id ->
                      getUserById (byteStringToString f_id) >>=        (\maybe_user ->
-                     ifNothingWrite maybe_user "User does not exist" ))
+                     do ifNothingWrite maybe_user "User does not exist"; return maybe_user ))
   case maybe_followed of
     Nothing -> return ()
     Just followed -> if uid follower == uid followed then invalid_parameter "You can't follow yourself" else subscribe follower followed

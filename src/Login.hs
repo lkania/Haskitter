@@ -15,9 +15,6 @@ import Helpers
 
 ------------------------------------------------------------------------------
 
--- TODO: Read and understand more this line
--- Make a following of the types
-
 login :: String -> String -> AppHandler (Maybe User)
 login user_email user_password = do
   maybe_user <- getUserByEmail user_email
