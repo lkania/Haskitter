@@ -29,14 +29,15 @@ import Feed
 -- | The application's routes.
 routes :: [(BS.ByteString, AppHandler ())]
 routes = [
-        ( "/posts"     ,  method GET      postsIndexHandler               )
-      , ( "/users"     ,  method GET      usersIndexHandler               )
-      , ( "/user/:id"  ,  method GET      userHandler                     )
-      , ( "/feed/:id"  ,  method GET      feedHandler                     )
-      , ( "/post"      ,  method POST   $ loginHandler postHandler        )
-      , ( "/follow"    ,  method POST   $ loginHandler followHandler      )
-      , ( "/signup"    ,  method POST   $ signUpHandler                   )
-      , ( "/user/:id"  ,  method DELETE $ loginHandler deleteHandler      )
+        ( "/posts"            ,  method GET      postsIndexHandler               )
+      , ( "/postsWithUser"    ,  method GET      postsWitUserIndexHandler        )
+      , ( "/users"            ,  method GET      usersIndexHandler               )
+      , ( "/user/:id"         ,  method GET      userHandler                     )
+      , ( "/feed/:id"         ,  method GET      feedHandler                     )
+      , ( "/post"             ,  method POST   $ loginHandler postHandler        )
+      , ( "/follow"           ,  method POST   $ loginHandler followHandler      )
+      , ( "/signup"           ,  method POST   $ signUpHandler                   )
+      , ( "/user/:id"         ,  method DELETE $ loginHandler deleteHandler      )
       ]
 
 ------------------------------------------------------------------------------
@@ -51,6 +52,11 @@ postsIndexHandler :: AppHandler ()
 postsIndexHandler = do
   allPosts <- getPosts
   writeLBS . encode $ allPosts
+
+postsWitUserIndexHandler :: AppHandler ()
+postsWitUserIndexHandler = do
+  posts <- getPostsWithUser
+  writeLBS . encode $ posts 
 
 usersIndexHandler :: AppHandler ()
 usersIndexHandler = do
@@ -112,7 +118,7 @@ feedHandler' user_id = do
 postHandler :: User -> AppHandler ()
 postHandler user = do
   message <- getParam "message"
-  checkParam message "No message" (return ()) (\m -> post (byteStringToString m) user)
+  checkParam message "No message" (return ()) (\m -> createPost (byteStringToString m) user)
 
 checkParam :: Maybe b -> BS.ByteString -> AppHandler a -> (b -> AppHandler a) -> AppHandler a
 checkParam param error_message return_value handler = maybe (do invalid_parameter error_message; return_value) handler param
