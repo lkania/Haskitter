@@ -23,21 +23,26 @@ import Posts
 import Login
 import Helpers
 import Feed
+import Errors
 
 ------------------------------------------------------------------------------
 -- | The application's routes.
 routes :: [(BS.ByteString, AppHandler ())]
 routes = [
-        ( "/posts"            ,  method GET    $ headersHandler postsIndexHandler               )
-      , ( "/postsWithUser"    ,  method GET    $ headersHandler postsWitUserIndexHandler        )
+        ( "/posts"            ,  method GET    $ headersHandler $ runHandler postsIndexHandler  )
+      , ( "/postsWithUser"    ,  method GET    $ headersHandler $ runHandler postsWitUserIndexHandler )
       , ( "/users"            ,  method GET    $ headersHandler usersIndexHandler               )
-      , ( "/user/:id"         ,  method GET    $ headersHandler userHandler                     )
+      , ( "/user/:id"         ,  method GET    $ headersHandler $ runHandler userHandler        )
       , ( "/feed/:id"         ,  method GET    $ headersHandler feedHandler                     )
       , ( "/post"             ,  method POST   $ headersHandler $ loginHandler postHandler      )
       , ( "/follow"           ,  method POST   $ headersHandler $ loginHandler followHandler    )
       , ( "/signup"           ,  method POST   $ headersHandler signUpHandler                   )
       , ( "/user/:id"         ,  method DELETE $ headersHandler $ loginHandler deleteHandler    )
       ]
+
+------------------------------------------------------------------------------
+-- |
+
 
 ------------------------------------------------------------------------------
 -- | Build a new Haskitter snaplet.
@@ -47,15 +52,15 @@ hashkitterInit = makeSnaplet "hashkitterInit" "A simple twitter written in Haske
   addRoutes routes
   return $ Haskitter { _pg = p}
 
-postsIndexHandler :: AppHandler ()
+postsIndexHandler :: ExceptT Error AppHandler ()
 postsIndexHandler = do
-  allPosts <- getPosts
-  writeLBS . encode $ allPosts
+  allPosts <- getPosts'
+  lift $ writeLBS . encode $ allPosts
 
-postsWitUserIndexHandler :: AppHandler ()
+postsWitUserIndexHandler :: ExceptT Error AppHandler ()
 postsWitUserIndexHandler = do
   posts <- getPostsWithUser
-  writeLBS . encode $ posts
+  lift $ writeLBS . encode $ posts
 
 usersIndexHandler :: AppHandler ()
 usersIndexHandler = do
@@ -67,15 +72,31 @@ headersHandler appHandler = do
   modifyResponse $ setHeader "Content-Type" "application/json"
   appHandler
 
-userHandler :: AppHandler ()
-userHandler = do
-  user_id <- getParam "id"
-  maybe (writeBS "User does not exist") userHandler' user_id
+printError :: Error -> ExceptT Error AppHandler a
+printError err = do
+  lift . writeBS $ case err of
+    NullId -> "{\"error\": \"User id is null\"}"
+    NoSuchUser -> "{\"error\": \"User does not exist\"}"
+  throwE err
 
-userHandler' :: BS.ByteString -> AppHandler ()
-userHandler' user_id = do
-  maybe_user <- (getUserById $ (byteStringToString user_id))
-  checkParam maybe_user "User does not exist" (return ()) (\user -> writeLBS . encode $ user)
+runHandler :: ExceptT Error AppHandler () -> AppHandler ()
+runHandler handler = do
+  runExceptT handler
+  return ()
+
+userHandler :: ExceptT Error AppHandler ()
+userHandler = do
+  user <- userHandler' `catchE` printError
+  lift $ writeLBS . encode $ user
+
+userHandler' :: ExceptT Error AppHandler User
+userHandler' = do
+  user_id <- lift $ getParam "id"
+  maybe (throwE NullId) userHandler'' user_id
+
+userHandler'' :: BS.ByteString -> ExceptT Error AppHandler User
+userHandler'' user_id = getUserById' $ (byteStringToString user_id)
+
 
 -- The parameter mapping decoded from the POST body. Note that Snap only auto-decodes POST request bodies when the request's Content-Type is application/x-www-form-urlencoded. For multipart/form-data use handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams

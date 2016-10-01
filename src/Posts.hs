@@ -16,6 +16,7 @@ import Application
 import Feed
 import Utils
 import Users
+import Errors
 
 ------------------------------------------------------------------------------
 
@@ -41,24 +42,24 @@ instance ToJSON PostWithUser where
 getPosts :: AppHandler [Post]
 getPosts = with pg $ query_ "SELECT message,user_id FROM posts"
 
-getPostsWithUser :: AppHandler [PostWithUser]
+getPosts' :: ExceptT Error AppHandler [Post]
+getPosts' = lift $ with pg $ query_ "SELECT message,user_id FROM posts"
+
+getPostsWithUser :: ExceptT Error AppHandler [PostWithUser]
 getPostsWithUser = do
-  posts <- getPosts
+  posts <- getPosts'
   concatAppHandlerList $ postsToPostsWithUser posts
 
-postsToPostsWithUser :: [Post] -> [AppHandler PostWithUser]
+postsToPostsWithUser :: [Post] -> [ExceptT Error AppHandler PostWithUser]
 postsToPostsWithUser posts = map postToPostWithUser posts
 
-postToPostWithUser :: Post -> AppHandler PostWithUser
+postToPostWithUser :: Post -> ExceptT Error AppHandler PostWithUser
 postToPostWithUser post = do
-  user <- maybeUserToUserAppHandler $ getUserById $ show $ user_id post
-  return $ createPostWithUser post user
+  user <- getUserById' $ show $ user_id post
+  lift $ return $ createPostWithUser post user
 
 createPostWithUser :: Post -> User -> PostWithUser
 createPostWithUser post user = PostWithUser post user
-
-maybeUserToUserAppHandler :: AppHandler (Maybe User) -> AppHandler User
-maybeUserToUserAppHandler app_maybe_user = app_maybe_user >>= (\maybe_user -> return $ justUser maybe_user)  
 
 justUser :: Maybe User -> User
 justUser (Just user) = user 

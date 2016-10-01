@@ -14,6 +14,7 @@ import Database.PostgreSQL.Simple.ToField
 
 ------------------------------------------------------------------------------
 import Application
+import Errors
 
 ------------------------------------------------------------------------------
 
@@ -33,8 +34,14 @@ instance ToRow Int where
 getUsers :: AppHandler [User]
 getUsers = with pg $ query_ "SELECT id,email,\"name\",password FROM users"
 
+getUsers' :: ExceptT Error AppHandler [User]
+getUsers' = lift $ with pg $ query_ "SELECT id,email,\"name\",password FROM users"
+
 getUserById :: String -> AppHandler (Maybe User)
 getUserById user_id = getUserByFunction $ (\user -> show (uid user) == user_id)
+
+getUserById' :: String -> ExceptT Error AppHandler User
+getUserById' user_id = getUserByFunction' $ (\user -> show (uid user) == user_id)
 
 getUserByEmail :: String -> AppHandler (Maybe User)
 getUserByEmail user_email = getUserByFunction $ (\user -> email user == user_email)
@@ -43,6 +50,11 @@ getUserByFunction :: (User -> Bool) -> AppHandler (Maybe User)
 getUserByFunction f = do
   users <- getUsers
   return $ if length (filter f users) /= 0 then Just $ head (filter f users) else Nothing
+
+getUserByFunction' :: (User -> Bool) -> ExceptT Error AppHandler User
+getUserByFunction' f = do
+  users <- getUsers'
+  if length (filter f users) /= 0 then lift . return $ head (filter f users) else throwE NoSuchUser
 
 checkPassword :: User -> String -> Bool
 checkPassword user user_password = password user == user_password
