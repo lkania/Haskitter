@@ -66,13 +66,13 @@ getPostByUserId userId = do
   posts <- getPosts'
   lift $ return $ filter (\post -> userId == user_id post) posts
 
-getFollowedPostsByUserId :: String -> ExceptT Error AppHandler [Post]
-getFollowedPostsByUserId userId = do
-  follows <- getFollowedsById userId
+getFollowedPostsByUserId :: User -> ExceptT Error AppHandler [Post]
+getFollowedPostsByUserId user = do
+  follows <- getFollowedsById user
   concatListAppHandlerList $ map (\follow -> getPostByUserId $ followed_id follow) follows
 
 ------------------------------------------------------------------------------
--- | Writing operations 
+-- | Writing operations
 
 createPost :: String -> User -> AppHandler ()
 createPost message user = do

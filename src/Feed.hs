@@ -16,11 +16,9 @@ instance FromRow Follow where
   fromRow = Follow <$> field <*> field
 
 getFollows :: ExceptT Error AppHandler [Follow]
-getFollows = lift $ with pg $ query_ "SELECT follower_id,followed_id FROM relationships" 
+getFollows = lift $ with pg $ query_ "SELECT follower_id,followed_id FROM relationships"
 
-getFollowedsById :: String -> ExceptT Error AppHandler [Follow]
-getFollowedsById user_id = do 
+getFollowedsById :: User -> ExceptT Error AppHandler [Follow]
+getFollowedsById user = do
   follows <- getFollows
-  (lift . return) $ filter (\follow -> (show $ follower_id follow) == user_id) follows
-
-
+  (lift . return) $ filter (\follow -> (follower_id follow) == (uid user)) follows

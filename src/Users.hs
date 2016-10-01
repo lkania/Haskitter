@@ -25,7 +25,7 @@ instance FromRow User where
 
 instance ToJSON User where
   toJSON(User uid email name password) =
-    object ["name" Data.Aeson..= name, "id" Data.Aeson..= uid]
+    object ["id" Data.Aeson..= uid, "email" Data.Aeson..= email, "name" Data.Aeson..= name]
 
 instance ToRow Int where
   toRow d = [toField d]
@@ -46,6 +46,9 @@ getUserById' user_id = getUserByFunction' $ (\user -> show (uid user) == user_id
 getUserByEmail :: String -> AppHandler (Maybe User)
 getUserByEmail user_email = getUserByFunction $ (\user -> email user == user_email)
 
+getUserByEmail' :: String -> ExceptT Error AppHandler User
+getUserByEmail' user_email = getUserByFunction' $ (\user -> email user == user_email)
+
 getUserByFunction :: (User -> Bool) -> AppHandler (Maybe User)
 getUserByFunction f = do
   users <- getUsers
@@ -64,12 +67,13 @@ subscribe follower followed = do
   with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)
   return ()
 
-signUp :: String -> String -> String -> AppHandler ()
+-- TODO: When a new user is created the function is returning NoSuchUser
+signUp :: String -> String -> String -> ExceptT Error AppHandler User
 signUp user_email user_name user_password = do
-  with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)
-  return () 
+  lift $ with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)
+  getUserByEmail' user_email
 
 delete :: User -> AppHandler ()
-delete user = do 
+delete user = do
   with pg $ execute "DELETE FROM users where id = ?" (uid user)
   return ()

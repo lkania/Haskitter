@@ -36,4 +36,11 @@ catchE throwing handler = ExceptT $ do
 
 ---
 
-data Error = NoSuchUser | NullId
+data Error =  NoSuchUser |
+              NullId |
+              EmailAlreadyTaken |
+              NullEmail |
+              NullName |
+              NullPassword |
+              NullPasswordConfirmation |
+              PasswordConfirmationMissmatch
