@@ -32,8 +32,8 @@ routes = [
         ( "/posts"            ,  method GET    $ headersHandler $ runHandler postsIndexHandler  )
       , ( "/postsWithUser"    ,  method GET    $ headersHandler $ runHandler postsWitUserIndexHandler )
       , ( "/users"            ,  method GET    $ headersHandler $ runHandler usersIndexHandler  )
-      , ( "/user/:id"         ,  method GET    $ headersHandler $ runHandler userHandler        )
-      , ( "/feed/:id"         ,  method GET    $ headersHandler feedHandler                     )
+      , ( "/user/:id"         ,  method GET    $ headersHandler $ runHandler $ genericHandler $ userIdHandler $ userHandler         )
+      , ( "/feed/:id"         ,  method GET    $ headersHandler $ runHandler $ genericHandler $ userIdHandler $ feedHandler        )
       , ( "/post"             ,  method POST   $ headersHandler $ loginHandler postHandler      )
       , ( "/follow"           ,  method POST   $ headersHandler $ loginHandler followHandler    )
       , ( "/signup"           ,  method POST   $ headersHandler signUpHandler                   )
@@ -84,19 +84,18 @@ runHandler handler = do
   runExceptT handler
   return ()
 
-userHandler :: ExceptT Error AppHandler ()
-userHandler = do
-  user <- userHandler' `catchE` printError
-  lift $ writeLBS . encode $ user
+genericHandler :: ToJSON a => ExceptT Error AppHandler a -> ExceptT Error AppHandler ()
+genericHandler handler = do
+  obj <- handler `catchE` printError
+  lift $ writeLBS . encode $ obj
 
-userHandler' :: ExceptT Error AppHandler User
-userHandler' = do
+userIdHandler :: (BS.ByteString -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
+userIdHandler handler = do
   user_id <- lift $ getParam "id"
-  maybe (throwE NullId) userHandler'' user_id
+  maybe (throwE NullId) handler user_id
 
-userHandler'' :: BS.ByteString -> ExceptT Error AppHandler User
-userHandler'' user_id = getUserById' $ (byteStringToString user_id)
-
+userHandler :: BS.ByteString -> ExceptT Error AppHandler User
+userHandler user_id = getUserById' $ (byteStringToString user_id)
 
 -- The parameter mapping decoded from the POST body. Note that Snap only auto-decodes POST request bodies when the request's Content-Type is application/x-www-form-urlencoded. For multipart/form-data use handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams
@@ -126,15 +125,8 @@ ifNothingWrite maybe_var message = do
     Nothing -> writeBS message
     Just var -> return ()
 
-feedHandler :: AppHandler ()
-feedHandler = do
-  user_id <- getParam "id"
-  maybe (invalid_parameter "User does not exist") feedHandler' user_id
-
-feedHandler' :: BS.ByteString -> AppHandler ()
-feedHandler' user_id = do
-  feed <- getFollowedPostsByUserId (byteStringToString user_id)
-  writeLBS . encode $ feed
+feedHandler :: BS.ByteString -> ExceptT Error AppHandler [Post]
+feedHandler user_id = getFollowedPostsByUserId (byteStringToString user_id)
 
 postHandler :: User -> AppHandler ()
 postHandler user = do

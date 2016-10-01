@@ -7,10 +7,10 @@ import Application
 
 ------------------------------------------------------------------------------
 
-concatListAppHandler :: AppHandler [a] -> AppHandler [a] -> AppHandler [a]
+concatListAppHandler :: Monad m => m [a] -> m [a] -> m [a]
 concatListAppHandler m1 m2 = m1 >>= (\a -> m2 >>= (\b -> return $ a ++ b ))
 
-concatListAppHandlerList :: [AppHandler [a]] -> AppHandler [a]
+concatListAppHandlerList :: Monad m => [m [a]] -> m [a]
 concatListAppHandlerList = foldr (\x xs -> concatListAppHandler x xs) (return [])
 
 concatAppHandler :: Monad m => m a -> m [a] -> m [a]

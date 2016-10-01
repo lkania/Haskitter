@@ -61,15 +61,12 @@ postToPostWithUser post = do
 createPostWithUser :: Post -> User -> PostWithUser
 createPostWithUser post user = PostWithUser post user
 
-justUser :: Maybe User -> User
-justUser (Just user) = user 
-
-getPostByUserId :: Int -> AppHandler [Post]
+getPostByUserId :: Int -> ExceptT Error AppHandler [Post]
 getPostByUserId userId = do
-  posts <- getPosts
-  return $ filter (\post -> userId == user_id post) posts
+  posts <- getPosts'
+  lift $ return $ filter (\post -> userId == user_id post) posts
 
-getFollowedPostsByUserId :: String -> AppHandler [Post]
+getFollowedPostsByUserId :: String -> ExceptT Error AppHandler [Post]
 getFollowedPostsByUserId userId = do
   follows <- getFollowedsById userId
   concatListAppHandlerList $ map (\follow -> getPostByUserId $ followed_id follow) follows

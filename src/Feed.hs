@@ -7,6 +7,7 @@ import Snap.Snaplet.PostgresqlSimple
 ------------------------------------------------------------------------------
 import Application
 import Users
+import Errors
 
 ------------------------------------------------------------------------------
 data Follow = Follow {follower_id :: Int, followed_id :: Int}
@@ -14,12 +15,12 @@ data Follow = Follow {follower_id :: Int, followed_id :: Int}
 instance FromRow Follow where
   fromRow = Follow <$> field <*> field
 
-getFollows :: AppHandler [Follow]
-getFollows = with pg $ query_ "SELECT follower_id,followed_id FROM relationships" 
+getFollows :: ExceptT Error AppHandler [Follow]
+getFollows = lift $ with pg $ query_ "SELECT follower_id,followed_id FROM relationships" 
 
-getFollowedsById :: String -> AppHandler [Follow]
+getFollowedsById :: String -> ExceptT Error AppHandler [Follow]
 getFollowedsById user_id = do 
   follows <- getFollows
-  return $ filter (\follow -> (show $ follower_id follow) == user_id) follows
+  (lift . return) $ filter (\follow -> (show $ follower_id follow) == user_id) follows
 
 
