@@ -31,7 +31,7 @@ routes :: [(BS.ByteString, AppHandler ())]
 routes = [
         ( "/posts"            ,  method GET    $ headersHandler $ runHandler postsIndexHandler  )
       , ( "/postsWithUser"    ,  method GET    $ headersHandler $ runHandler postsWitUserIndexHandler )
-      , ( "/users"            ,  method GET    $ headersHandler usersIndexHandler               )
+      , ( "/users"            ,  method GET    $ headersHandler $ runHandler usersIndexHandler  )
       , ( "/user/:id"         ,  method GET    $ headersHandler $ runHandler userHandler        )
       , ( "/feed/:id"         ,  method GET    $ headersHandler feedHandler                     )
       , ( "/post"             ,  method POST   $ headersHandler $ loginHandler postHandler      )
@@ -62,10 +62,10 @@ postsWitUserIndexHandler = do
   posts <- getPostsWithUser
   lift $ writeLBS . encode $ posts
 
-usersIndexHandler :: AppHandler ()
+usersIndexHandler :: ExceptT Error AppHandler ()
 usersIndexHandler = do
-  users <- getUsers
-  writeLBS . encode $ users
+  users <- getUsers'
+  lift $ writeLBS . encode $ users
 
 headersHandler :: AppHandler () -> AppHandler ()
 headersHandler appHandler = do
