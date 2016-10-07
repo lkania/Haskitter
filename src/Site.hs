@@ -20,7 +20,6 @@ import            Data.Aeson
 import Application
 import Users
 import Posts
-import Login
 import Helpers
 import Feed
 import Errors
@@ -34,15 +33,11 @@ routes = [
       , ( "/users"            ,  method GET    $ headersHandler $ runHandler $ genericHandler $ usersIndexHandler  )
       , ( "/user/:id"         ,  method GET    $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ userHandler         )
       , ( "/feed/:id"         ,  method GET    $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ feedHandler        )
-      , ( "/post"             ,  method POST   $ headersHandler $ loginHandler postHandler      )
-      , ( "/follow"           ,  method POST   $ headersHandler $ loginHandler followHandler    )
+      , ( "/post"             ,  method POST   $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ postHandler      )
+      , ( "/follow"           ,  method POST   $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ followHandler    )
       , ( "/signup"           ,  method POST   $ headersHandler $ runHandler $ genericHandler $ catchHandler $ signUpHandler                   )
-      , ( "/user/:id"         ,  method DELETE $ headersHandler $ loginHandler deleteHandler    )
+      , ( "/user/:id"         ,  method DELETE $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ deleteHandler    )
       ]
-
-------------------------------------------------------------------------------
--- |
-
 
 ------------------------------------------------------------------------------
 -- | Build a new Haskitter snaplet.
@@ -71,13 +66,13 @@ catchHandler :: ExceptT Error AppHandler a -> ExceptT Error AppHandler a
 catchHandler handler = handler `catchE` printError
 
 postsIndexHandler :: ExceptT Error AppHandler [Post]
-postsIndexHandler = getPosts'
+postsIndexHandler = getPosts
 
 postsWitUserIndexHandler :: ExceptT Error AppHandler [PostWithUser]
 postsWitUserIndexHandler = getPostsWithUser
 
 usersIndexHandler :: ExceptT Error AppHandler [User]
-usersIndexHandler = getUsers'
+usersIndexHandler = getUsers
 
 printError :: Error -> ExceptT Error AppHandler a
 printError err = do
@@ -90,6 +85,10 @@ printError err = do
     NullPassword -> "User password is null"
     NullPasswordConfirmation -> "User password confirmation is null"
     PasswordConfirmationMissmatch -> "There was a missmatch between user password and user password confirmation"
+    NullMessage -> "User message is null"
+    NullFollowerId -> "Follower id is null"
+    InvalidDelete -> "Invalid delete"
+    InvalidFollow -> "Invalid follow"
   throwE err
 
 getJSONError :: BS.ByteString -> BS.ByteString
@@ -98,7 +97,7 @@ getJSONError error = "{\"error\": \"" `BS.append` error `BS.append` "\"}"
 userIdHandler :: (User -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
 userIdHandler handler = do
   user_id <- lift $ getParam "id"
-  user <- maybe (throwE NullId) (\user_id -> getUserById' $ (byteStringToString user_id)) user_id
+  user <- maybe (throwE NullId) (\user_id -> getUserById $ (byteStringToString user_id)) user_id
   handler user
 
 userHandler :: User -> ExceptT Error AppHandler User
@@ -109,52 +108,27 @@ userHandler user = lift $ return user
 -- application/x-www-form-urlencoded. For multipart/form-data use
 -- handleFileUploads to decode the POST request and fill this mapping.
 -- https://hackage.haskell.org/package/snap-core-0.9.8.0/docs/Snap-Core.html#v:rqPostParams
-loginHandler :: (User -> AppHandler ()) -> AppHandler ()
-loginHandler appHandler = do
-  user_email    <- getParam "user_email"
-  user_password <- getParam "user_password"
-  maybe_user    <- checkParam user_email    "No email"    (return Nothing) (\u_email ->
-                   checkParam user_password "No password" (return Nothing) (\u_password ->
-                   loginHandler' u_email u_password ))
-  case maybe_user of
-    Nothing -> return ()
-    Just user -> appHandler user
-
-invalid_parameter :: BS.ByteString -> AppHandler ()
-invalid_parameter message = writeBS message
-
-loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler (Maybe User)
-loginHandler' user_email user_password = do
-  maybe_user <- login (byteStringToString user_email) (byteStringToString user_password)
-  ifNothingWrite maybe_user "Incorrect login"
-  return maybe_user
-
-ifNothingWrite :: Maybe a -> BS.ByteString -> AppHandler ()
-ifNothingWrite maybe_var message = do
-  case maybe_var of
-    Nothing -> writeBS message
-    Just var -> return ()
+loginHandler :: (User -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
+loginHandler handler = do
+  user_email <- nullCheck NullEmail (lift . return) "user_email"
+  user_password <- nullCheck NullPassword (lift . return) "user_password"
+  user <- getUserByEmail $ (byteStringToString user_email)
+  user <- checkPassword user (byteStringToString user_password)
+  handler user
 
 feedHandler :: User -> ExceptT Error AppHandler [Post]
 feedHandler user = getFollowedPostsByUserId user
 
-postHandler :: User -> AppHandler ()
+postHandler :: User -> ExceptT Error AppHandler Post
 postHandler user = do
-  message <- getParam "message"
-  checkParam message "No message" (return ()) (\m -> createPost (byteStringToString m) user)
+  user_message <- nullCheck NullMessage (lift . return) "user_message"
+  createPost (byteStringToString user_message) user
 
-checkParam :: Maybe b -> BS.ByteString -> AppHandler a -> (b -> AppHandler a) -> AppHandler a
-checkParam param error_message return_value handler = maybe (do invalid_parameter error_message; return_value) handler param
-
-followHandler :: User -> AppHandler ()
+followHandler :: User -> ExceptT Error AppHandler Follow
 followHandler follower = do
-  followed_id     <- getParam "followed_id"
-  maybe_followed  <- checkParam  followed_id "No id" (return Nothing) (\f_id ->
-                     getUserById (byteStringToString f_id) >>=        (\maybe_user ->
-                     do ifNothingWrite maybe_user "User does not exist"; return maybe_user ))
-  case maybe_followed of
-    Nothing -> return ()
-    Just followed -> if uid follower == uid followed then invalid_parameter "You can't follow yourself" else subscribe follower followed
+  followed_id <- nullCheck NullFollowerId (lift . return) "followed_id"
+  followed <- getUserById $ (byteStringToString followed_id)
+  if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed
 
 nullCheck :: Error -> (BS.ByteString -> ExceptT Error AppHandler BS.ByteString) -> BS.ByteString -> ExceptT Error AppHandler BS.ByteString
 nullCheck error f object_id = do
@@ -169,7 +143,7 @@ signUpHandler = do
   user_password_confirmation <- nullCheck NullPasswordConfirmation (lift . return) "user_password_confirmation"
   if user_password /= user_password_confirmation
     then throwE PasswordConfirmationMissmatch
-    else (do getUserByEmail' (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
+    else (do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
 
 signUpNoSuchUserHandler :: String -> String -> String -> Error -> ExceptT Error AppHandler User
 signUpNoSuchUserHandler user_email user_name user_password err = do
@@ -178,17 +152,7 @@ signUpNoSuchUserHandler user_email user_name user_password err = do
     EmailAlreadyTaken -> throwE EmailAlreadyTaken
   throwE err
 
-deleteHandler :: User -> AppHandler ()
+deleteHandler :: User -> ExceptT Error AppHandler User
 deleteHandler user = do
-  user_id <- getParam "id"
-  checkParam user_id "No id" (return ()) (\u_id ->
-   deleteHandler' user (byteStringToString u_id) )
-
-deleteHandler' :: User -> String -> AppHandler ()
-deleteHandler' user user_id =
-  if user_id /= (show $ uid user) then
-    do
-      writeBS "Id missmatch"
-      return ()
-  else
-    delete user
+  user_id <- nullCheck NullId (lift . return) "user_id"
+  if (byteStringToString user_id) /= (show $ uid user) then throwE InvalidDelete else delete user

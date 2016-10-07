@@ -33,7 +33,6 @@ catchE throwing handler = ExceptT $ do
     Left failure  -> runExceptT (handler failure)
     Right success -> return (Right success)
 
-
 ---
 
 data Error =  NoSuchUser |
@@ -43,4 +42,9 @@ data Error =  NoSuchUser |
               NullName |
               NullPassword |
               NullPasswordConfirmation |
-              PasswordConfirmationMissmatch
+              PasswordConfirmationMissmatch |
+              NullMessage |
+              NullFollowerId |
+              InvalidDelete |
+              InvalidFollow |
+              InvalidPassword

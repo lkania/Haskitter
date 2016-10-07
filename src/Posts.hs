@@ -39,15 +39,12 @@ instance ToJSON PostWithUser where
 ------------------------------------------------------------------------------
 -- | Reading operations
 
-getPosts :: AppHandler [Post]
-getPosts = with pg $ query_ "SELECT message,user_id FROM posts"
-
-getPosts' :: ExceptT Error AppHandler [Post]
-getPosts' = lift $ with pg $ query_ "SELECT message,user_id FROM posts"
+getPosts :: ExceptT Error AppHandler [Post]
+getPosts = lift $ with pg $ query_ "SELECT message,user_id FROM posts"
 
 getPostsWithUser :: ExceptT Error AppHandler [PostWithUser]
 getPostsWithUser = do
-  posts <- getPosts'
+  posts <- getPosts
   concatAppHandlerList $ postsToPostsWithUser posts
 
 postsToPostsWithUser :: [Post] -> [ExceptT Error AppHandler PostWithUser]
@@ -55,7 +52,7 @@ postsToPostsWithUser posts = map postToPostWithUser posts
 
 postToPostWithUser :: Post -> ExceptT Error AppHandler PostWithUser
 postToPostWithUser post = do
-  user <- getUserById' $ show $ user_id post
+  user <- getUserById $ show $ user_id post
   lift $ return $ createPostWithUser post user
 
 createPostWithUser :: Post -> User -> PostWithUser
@@ -63,7 +60,7 @@ createPostWithUser post user = PostWithUser post user
 
 getPostByUserId :: Int -> ExceptT Error AppHandler [Post]
 getPostByUserId userId = do
-  posts <- getPosts'
+  posts <- getPosts
   lift $ return $ filter (\post -> userId == user_id post) posts
 
 getFollowedPostsByUserId :: User -> ExceptT Error AppHandler [Post]
@@ -74,7 +71,7 @@ getFollowedPostsByUserId user = do
 ------------------------------------------------------------------------------
 -- | Writing operations
 
-createPost :: String -> User -> AppHandler ()
+createPost :: String -> User -> ExceptT Error AppHandler Post
 createPost message user = do
-  with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)
-  return ()
+  lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)
+  lift. return $ Post message (uid user)
