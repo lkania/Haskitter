@@ -354,77 +354,92 @@ comienza con `runExceptT handler`, haciendo que del tipo `ExceptT e m a` pasemos
 Ésta función analiza el valor de `x`, y en caso de que sea `Left` se llama a la función `runExceptT (errorHandler failure)`, la cual le pasa como argumento el error (de tipo `Error`) a la función `errorHandler` (que recordemos que tenía el tipo `e -> ExceptT c m a`, siendo nuestro caso `Error -> ExceptT Error AppHandler a`), y luego se le pasa como argumento a la función `runExceptT` el retorno de la función `errorHandler` (siendo del tipo `ExceptT Error AppHandler a`), pasando al tipo `AppHandler a`. En caso de que sea `Right`
 
 ___
-
 ### Inicialización del servidor
 
+El punto de entrada al programa es la función main, que tiene por tipo la monada IO.
+
 ```haskell
-```
 main :: IO ()
 main = do
-  (_, site, _) <- runSnaplet Nothing hashkitterInit -- Initialize a Memoise snaplet
-  quickHttpServe site -- Start the Snap server
+  (_, site, _) <- runSnaplet Nothing hashkitterInit
+  quickHttpServe site
+```
 
+La misma puede ser reescrita como
 
+```haskell
+main :: IO ()
+main = runSnaplet Nothing haskitterInit (\_ site _ -> quickHttpServe site)
+```
+La función ejecutar `runSnaplet`
 
+```haskell
+runSnaplet :: Maybe String -> SnapletInit b b -> IO (Text, Snap (), IO ())
+```
 
-hashkitterInit :: SnapletInit Haskitter Haskitter
-hashkitterInit = makeSnaplet "hashkitterInit" "A simple twitter written in Haskell" Nothing $ do
+Recibe un `Maybe String`, y un inicializador de `Snaplet` (`SnapletInit`). el string indica cuales son los nombres de los archivos de configuración tuilizados por cada Snaplet y en caso de recibir Nothing se utiliza `Just "devel"`. `runSnap` retorna una monada IO cuyos valores monádicos son
+- `Text` la concatenación de todos los logs durante la inicialización
+- `Snap ()` el handler de `Snap` que ha sido extendido por nuestros handlers de tipo `MonadSnap`
+- `IO ()` una acción de limpieza en ante el shutdown de la aplicación
+
+Luego el handler snap es pasado como parametro mediante el operador bind `>>=` a la función `(\_ handler _ -> quickHttpServe handler)` que comienza el servidor HTTP utilizando el handler pasado por parametro. Los parametros para la configuración del servidor son obtenidos por la linea de comandos.
+
+```Haskell
+quickHttpServe :: Snap () -> IO ()
+```
+
+SnapletInit `quickHttpServe` no retorna nunca. Si se quiere apagar el servidor se debe matar el thread que lo corre.
+
+`haskitterInit` es la función pasada como segundo parametro a `runSnaplet`. `haskitterInit` no recibe ningun parametro y retorna `SnapletInit Haskitter Haskitter`. Por otro lado el tipo `SnapletInit b v` se utiliza para obtener garantias en tiempo de compliación de que la `Snaplet` fue creada utilizando `makeSnaplet`, `nestSnaplet` o `embedSnaplet`.
+
+```Haskell
+haskitterInit :: SnapletInit Haskitter Haskitter
+haskitterInit = makeSnaplet "haskitter" "A simple twitter api written in Haskell" Nothing $ do
   p <- nestSnaplet "pg" pg pgsInit
   addRoutes routes
   return $ Haskitter { _pg = p}
+```
 
-data SnapletInit b vSource#
-Opaque newtype which gives us compile-time guarantees that the user is using makeSnaplet and either nestSnaplet or embedSnaplet correctly.
-makeSnapletSource#
-:: Text
-A default id for this snaplet. This is only used when the end-user has not already set an id using the nameSnaplet function.
--> Text
-A human readable description of this snaplet.
--> Maybe (IO FilePath)
-The path to the directory holding the snaplet's reference filesystem content. This will almost always be the directory returned by Cabal's getDataDir command, but it has to be passed in because it is defined in a package-specific import. Setting this value to Nothing doesn't preclude the snaplet from having files in in the filesystem, it just means that they won't be copied there automatically.
--> Initializer b v v
-Snaplet initializer.
--> SnapletInit b v
- 
-All snaplet initializers must be wrapped in a call to makeSnaplet, which handles standardized housekeeping common to all snaplets. Common usage will look something like this:
-fooInit :: SnapletInit b Foo
-fooInit = makeSnaplet "foo" "An example snaplet" Nothing $ do
-    -- Your initializer code here
-    return $ Foo 42
+`haskitterInit` se puede rescribir cómo
 
+```Haskell
+haskitterInit :: SnapletInit Haskitter Haskitter
+haskitterInit = makeSnaplet "haskitter" "A simple twitter api written in Haskell" Nothing (nestSnaplet "pg" pg pgsInit >>= (\p -> addRoutes routes >> return $ Haskitter { _pg = p}))  
+```
 
-Note that you're writing your initializer code in the Initializer monad, and makeSnaplet converts it into an opaque SnapletInit type. This allows us to use the type system to ensure that the API is used correctly.
+`haskitterInit` ejecuta `makeSnaplet` que recibe
 
+- `Text` un id para identificar al `Snaplet`  
+- `Text` una descripción del `Snaplet`
+- `Maybe (IO FilePath)` el path al directorio root de para la `Snaplet`
+    + En nuestro caso utilizamos `Nothing`, por lo que la `Snaplet` no copiará los archivos que genera automáticamente a ese directorio.
+- `Initializer b v v` el inicializador de la `Snaplet`.
 
-nestSnapletSource#
-:: ByteString
-The root url for all the snaplet's routes. An empty string gives the routes the same root as the parent snaplet's routes.
--> SnapletLens v v1
-Lens identifying the snaplet
--> SnapletInit b v1
-The initializer function for the subsnaplet.
--> Initializer b v (Snaplet v1)
- 
-Runs another snaplet's initializer and returns the initialized Snaplet value. Calling an initializer with nestSnaplet gives the nested snaplet access to the same base state that the current snaplet has. This makes it possible for the child snaplet to make use of functionality provided by sibling snaplets.
+```Haskell
+makeSnaplet :: Text -> Text -> -> Maybe (IO FilePath) -> Initializer b v v -> SnapletInit b v
+```
 
+El inicializador de la `Snaplet` se obtiene como retorno de la función `nestSnaplet "pg" pg pgsInit >>= (\p -> addRoutes routes >> return $ Haskitter { _pg = p})`. Luego makeSnaplet toma el `Initializer b v v` como parametro y retorna un `SnapInit Haskitter Haskitter`.
 
+Analizemos la función `nestSnaplet "pg" pg pgsInit >>= (\p -> addRoutes routes >> return $ Haskitter { _pg = p})` que retorna el `Initializer b v v` en detalle.
+
+```Haskell
+nestSnapletSource :: ByteString -> SnapletLens v v1 -> SnapletInit b v1 -> Initializer b v (Snaplet v1)
+```
+
+`nestSnapletSource` recibe  
+- `ByteString` una url que simboloza la ruta de la `Snaplet`
+- `SnapletLens` el lens que identifca a la `Snaplet`
+- `SnapInit` la función inicializadora uan `Snaplet`
+
+`nestSnapletSource` ejecuta el incializar y retorna la `Snaplet` inicializada. Al usar `nestSnapletSource` permitimos que la `Snaplet` anidada tenga acceso al estado base de la `Snaplet` actual. Por lo tanto en la función `nestSnaplet "pg" pg pgsInit` estas permitiendo que la `Snaplet` `pg` tenga acceso al estado base de la `Snaplet` `Snap`.
+
+El valor monadico de la `Snaplet` (`Monad`) inicializada retornada por `nestSnaplet "pg" pg pgsInit` es recibida por parametro por la función  `(\p -> addRoutes routes >> return $ Haskitter { _pg = p})` por el operador bind `>>=`.
+
+```Haskell
 addRoutes :: [(ByteString, Handler b v ())] -> Initializer b v ()
-Adds routing to the current Handler. The new routes are merged with the main routing section and take precedence over existing routing that was previously defined.
+```
 
+`addRoutes` agrega routeo al handler actual, y se mergea con el ruteo principal. Como el ruteo principal esta definido como "/", si se ejecuta `addRoutes :: [("/handler", handler)]` el ruteo de `handler` será "/handler".  
 
-
-
-main :: IO ()
-main = do
-  (_, site, _) <- runSnaplet Nothing hashkitterInit -- Initialize a Memoise snaplet
-  quickHttpServe site -- Start the Snap server
-
-Snap.Snaplet
-Snaplets allow you to build web applications out of composable parts. This allows you to build self-contained units and glue them together to make your overall application.
-A snaplet has a few moving parts, some user-defined and some provided by the snaplet API:
-each snaplet has its own configuration given to it at startup.
-each snaplet is given its own directory on the filesystem, from which it reads its configuration and in which it can store files.
-each snaplet comes with an Initializer which defines how to create an instance of the Snaplet at startup. The initializer decides how to interpret the snaplet configuration, which URLs to handle (and how), sets up the initial snaplet state, tells the snaplet runtime system how to clean the snaplet up, etc.
-each snaplet contains some user-defined in-memory state; for instance, a snaplet that talks to a database might contain a reference to a connection pool. The snaplet state is an ordinary Haskell record, with a datatype defined by the snaplet author. The initial state record is created during initialization and is available to snaplet Handlers when serving HTTP requests.
-quickHttpServe :: Snap () -> IO ()Source#
-Starts serving HTTP using the given handler. The configuration is read from the options given on the command-line, as returned by commandLineConfig. This function never returns; to shut down the HTTP server, kill the controlling thread.
+El inicializador (`Monad`) retornado por `addRoutes` es pasado por parametro a la función `return $ Haskitter { _pg = p})`, que accede a p del contexto de la `Monad` e inicializa la `Snaplet` `Haskitter`, retornado un `Initializer`. Este `Initializer` es utilizado por makeSnaplet para retonar un `SnapletInit` para inicializar la `Snaplet`, que será el servidor.
