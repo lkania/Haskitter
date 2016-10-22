@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Haskitter by lkania</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Haskitter</h1>
+      <h2 class="project-tagline">A Twitter API written in Haskell</h2>
+      <a href="https://github.com/lkania/Haskitter" class="btn">View on GitHub</a>
+      <a href="https://github.com/lkania/Haskitter/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/lkania/Haskitter/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <p>Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers.</p>
+
+<p>Éstas son todas las rutas que tiene la API:</p>
+
+<pre><code>- /posts
+- /postsWithUser
+- /users
+- /user/:id
+- /feed/:id
+- /post
+- /follow
+- /signup
+- /user/:id
+</code></pre>
+
+<h4>
+<a id="posts" class="anchor" href="#posts" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>/posts</h4>
+
+<p>Éste endpoint retorna todos los posts de la base de datos.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-s"><span class="pl-pds">"</span>/posts<span class="pl-pds">"</span></span> , method <span class="pl-ent">GET</span> $ headersHandler $ runHandler $ genericHandler $ postsIndexHandler</pre></div>
+
+<hr>
+
+<p>Se comienza llamando a la función <code>postsIndexHandler</code>, la cual retorna un valor del tipo <code>ExceptT Error AppHandler [Post]</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">postsIndexHandler</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">Post</span>]
+postsIndexHandler = getPosts</pre></div>
+
+<p><code>postsIndexHandler</code> no recibe ningún parámtero de entrada, y llama a la función <code>getPosts</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">getPosts</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">Post</span>]
+getPosts = lift $ with pg $ query_ <span class="pl-s"><span class="pl-pds">"</span>SELECT message,user_id FROM posts<span class="pl-pds">"</span></span></pre></div>
+
+<p>La función <code>getPosts</code> realiza una query para obtener todos los posts de la base de datos. Utiliza la Snaplet de PostgreSql, y retorna un array de posts como un valor monádico de <code>AppHandler</code>, siendo el tipo retornado <code>AppHandler [Post]</code> haciendo un lift de dicha mónada a <code>ExceptT Error AppHandler [Post]</code>.</p>
+
+<hr>
+
+<div class="highlight highlight-source-haskell"><pre>genericHandler $ handler</pre></div>
+
+<p><code>genericHandler</code> es una función que recibe un handler (mónada del tipo <code>ExceptT Error AppHandler a</code>) y retorna un handler (mónada del tipo <code>ExceptT Error AppHandler ()</code>). </p>
+
+<div class="highlight highlight-source-haskell"><pre>genericHandler <span class="pl-k">::</span> <span class="pl-en">ToJSON</span> <span class="pl-smi">a</span> <span class="pl-k">=</span>&gt; <span class="pl-ent">ExceptT</span> <span class="pl-ent">Error</span> <span class="pl-ent">AppHandler</span> a -&gt; <span class="pl-ent">ExceptT</span> <span class="pl-ent">Error</span> <span class="pl-ent">AppHandler</span> <span class="pl-c1">()</span>
+genericHandler handler = <span class="pl-k">do</span>
+  obj &lt;- handler
+  lift $ writeLBS . encode $ obj</pre></div>
+
+<p><code>genericHandler</code> en su declaración de tipos obliga a que el tipo de <code>a</code> haya instanciado <code>ToJSON</code> debido a que es aquel valor el cual va a ser el body de la respuesta HTTP.</p>
+
+<p>El handler es una mónada que tiene valor monádico <code>a</code>. Éste valor a se pasa por parámetro a la función <code>(\obj -&gt; lift $ writeLBS . encode $ obj)</code> mediante el operador <code>(&gt;&gt;=)</code>.  Al realizar <code>writeLBS . encode $ obj</code> estamos codificando en json el objeto (sabemos que el valor monádico ha instanciado <code>ToJSON</code>) y lo escribimos en el body de la HTTP response mediante <code>writeLBS</code>, ésto tiene tipo <code>AppHandler ()</code>, el cual lifteamos para retornar <code>ExceptT Error AppHandler ()</code>.</p>
+
+<hr>
+
+<div class="highlight highlight-source-haskell"><pre>runHandler $ genericHandler $ handler</pre></div>
+
+<p><code>genericHandler</code> se concatena con <code>runHandler</code>.</p>
+
+<p><code>runHandler</code> es una función que recibe un handler (mónada del tipo <code>ExceptT Error AppHandler ()</code>) y retorna un handler (mónada del tipo <code>AppHandler ()</code>).</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">runHandler</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span> <span class="pl-k">-&gt;</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span>
+runHandler handler = <span class="pl-k">do</span>
+  runExceptT handler
+  <span class="pl-c1">return</span> <span class="pl-c1">()</span></pre></div>
+
+<p><code>runHandler</code> puede ser reescrita como:</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">runHandler</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span> <span class="pl-k">-&gt;</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span>
+runHandler handler = (runExceptT handler) &gt;&gt;= (\a -&gt; <span class="pl-c1">return</span> <span class="pl-c1">()</span>)</pre></div>
+
+<p>El parámetro <code>handler</code> tiene un tipo <code>ExceptT Error AppHandler ()</code>, pero queremos retornar <code>AppHandler ()</code>, por lo que realizamos la función <code>runExcpetT</code>, la cual nos devuelve el valor monádico de <code>ExceptT Error AppHandler ()</code> que es la mónada <code>AppHandler ()</code>. Éste valor se pasa mediante binding a la función <code>(\a -&gt; return ())</code>, la cual ignora el parámetro y retorna <code>AppHandler ()</code>.</p>
+
+<p>Nosotros no podríamos haber hecho <code>(handler) &gt;&gt;= (\a -&gt; return ())</code>, pues el tipo de <code>&gt;&gt;=</code> es <code>:: m a -&gt; (a -&gt; m b) -&gt; m b</code>, por lo tanto ya que handler es <code>ExceptT Error AppHandler a</code>, se debería retornar <code>ExceptT Error AppHandler b</code>, el cual no es el tipo que necesitamos.</p>
+
+<hr>
+
+<div class="highlight highlight-source-haskell"><pre>headersHandler $ runHandler $ genericHandler $ handler</pre></div>
+
+<p><code>handler</code> se concatena con <code>genericHandler</code> que se concatena con <code>runHandler</code> que se concatena con <code>headersHandler</code>.</p>
+
+<p><code>headersHandler</code> es una función que recibe un handler (mónada del tipo <code>AppHandler ()</code>) y retorna un handler (mónada del tipo <code>AppHandler ()</code>).</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">headersHandler</span> <span class="pl-k">::</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span> <span class="pl-k">-&gt;</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span>
+headersHandler appHandler = <span class="pl-k">do</span>
+  modifyResponse $ setHeader <span class="pl-s"><span class="pl-pds">"</span>Content-Type<span class="pl-pds">"</span></span> <span class="pl-s"><span class="pl-pds">"</span>application/json<span class="pl-pds">"</span></span>
+  appHandler</pre></div>
+
+<p>Ésta función puede ser reescrita como:</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">headersHandler</span> <span class="pl-k">::</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span> <span class="pl-k">-&gt;</span> <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span>
+headersHandler handler = (modifyResponse $ setHeader <span class="pl-s"><span class="pl-pds">"</span>Content-Type<span class="pl-pds">"</span></span> <span class="pl-s"><span class="pl-pds">"</span>application/json<span class="pl-pds">"</span></span>) &gt;&gt;= (\a -&gt; handler)</pre></div>
+
+<p><code>(modifyResponse $ setHeader "Content-Type" "application/json")</code> es una función que modifica el contexto modificando el HTTP response seteando el header “Content-Type”, especificando que la respuesta va a contener el formato json, dado a que es una API, y retornando <code>AppHandler ()</code>. Mediante el binding éste valor es pasado como parámetro a <code>(\a -&gt; appHandler)</code> que lo ignora y retorna handler (de tipo <code>AppHandler ()</code>).</p>
+
+<hr>
+
+<div class="highlight highlight-source-haskell"><pre>method <span class="pl-ent">GET</span> $ headersHandler $ runHandler $ genericHandler $ handler</pre></div>
+
+<p><code>handler</code> se concatena con <code>genericHandler</code> que se concatena con <code>runHandler</code> que se concatena con <code>headersHandler</code>, que se pasa como segundo parámetro a la función <code>method</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre>method <span class="pl-k">::</span> <span class="pl-en">MonadSnap</span> <span class="pl-smi">m</span> <span class="pl-k">=</span>&gt; <span class="pl-ent">Method</span> -&gt; m a -&gt; m a</pre></div>
+
+<p><code>method</code> pertence al modulo <code>Snap.Core</code>, el cual recibe una función de tipo <code>Method</code> por primer parámetro y una <code>MonadSnap</code> por segundo parámetro. <code>method</code> ejecuta la <code>MonadSnap</code> si el método de la request HTTP coincide con el método pasado como argumento, en éste caso el método GET. Ésta información la consigue accediendo al contexto que nos provee <code>Snap</code>, que provee toda la información sobre el HTTP Request y HTTP Response.</p>
+
+<p>Podemos ver por el tipo de <code>method</code> que nuestro handler (<code>headersHandler $ runHandler $ genericHandler $ handler</code>) es instancia de <code>MonadSnap</code>. <code>MonadSnap</code> es el equivalente de <code>MonadIO</code> para <code>IO</code>, por lo que nos permite extender la funcionalidad accediendo a la monada <code>Snap</code> cuando queramos.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-k">class</span> (<span class="pl-en"><span class="pl-e">Monad</span></span> <span class="pl-smi">m</span>) <span class="pl-k">=&gt;</span> <span class="pl-en">MonadSnap</span> <span class="pl-smi">m</span> <span class="pl-k">where</span>
+<span class="pl-en">liftSnap</span> <span class="pl-k">::</span> <span class="pl-en">Snap</span> <span class="pl-smi">a</span> <span class="pl-k">-&gt;</span> <span class="pl-smi">m</span> <span class="pl-smi">a</span></pre></div>
+
+<p>Ahora bien, ¿cómo estamos accediendo a <code>Snap</code> en el handler? Uno esperaría que obtengamos la monada <code>Snap</code>, modifiquemos el contexto a traves de ella y luego realizemos <code>liftSnap</code> para obtener la <code>MonadSnap</code> de nuevo. Esto no se ve en en handler debido a que utilizamos la función <code>writeLBS</code>. </p>
+
+<div class="highlight highlight-source-haskell"><pre>writeLBS <span class="pl-k">::</span> <span class="pl-en">MonadSnap</span> <span class="pl-smi">m</span> <span class="pl-k">=</span>&gt; <span class="pl-ent">ByteString</span> -&gt; m <span class="pl-c1">()</span></pre></div>
+
+<p><code>writeLBS</code> oculta este comportamiento y escribe el string en el body de la HTTP Response. </p>
+
+<p>Todo handler se agrega en <code>routes</code> de la siguiente manera:</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">routes</span> <span class="pl-k">::</span> [(<span class="pl-en"><span class="pl-c1">BS.</span>ByteString</span>, <span class="pl-en">AppHandler</span> <span class="pl-c1">()</span><span class="pl-k">)]</span>
+routes = [
+        ...
+        (<span class="pl-s"><span class="pl-pds">"</span>/endpoint<span class="pl-pds">"</span></span>, method <span class="pl-ent">METHOD</span> $ headersHandler $ runHandler $ genericHandler $ handler),
+        ...
+      ]</pre></div>
+
+<p>Todo handler está en el array que es retornado por la función constante <code>routes</code>.</p>
+
+<h4>
+<a id="postswithuser" class="anchor" href="#postswithuser" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>/postsWithUser</h4>
+
+<p>Éste endpoint retorna todos los posts de la base de datos con el usuario que los creó asociado.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-s"><span class="pl-pds">"</span>/postsWithUser<span class="pl-pds">"</span></span>, method <span class="pl-ent">GET</span> $ headersHandler $ runHandler $ genericHandler $ postsWitUserIndexHandler</pre></div>
+
+<hr>
+
+<p>Se comienza llamando a la función <code>postsWithUserIndexHandler</code>, la cual no recibe ningún parámtero de entrada y retorna un valor del tipo <code>ExceptT Error AppHandler [PostWithUser]</code>. Ésta función lo único que hace es llamar a la función <code>getPostsWithUser</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">postsWitUserIndexHandler</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">PostWithUser</span>]
+postsWitUserIndexHandler = getPostsWithUser</pre></div>
+
+<p><code>getPostsWithUser</code> es una función que no recibe parámetro de entrada y retorna <code>ExceptT Error AppHandler [PostWithUser]</code>. </p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">getPostsWithUser</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">PostWithUser</span>]
+getPostsWithUser = <span class="pl-k">do</span>
+  posts &lt;- getPosts
+  concatAppHandlerList $ postsToPostsWithUser posts</pre></div>
+
+<p>La función <code>getPostsWithUser</code> la podemos reescribir de la siguiente forma:</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">getPostsWithUser</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">PostWithUser</span>]
+getPostsWithUser = getPosts &gt;&gt;= (\posts -&gt; concatAppHandlerList $ postsToPostsWithUser posts)</pre></div>
+
+<p><code>getPosts</code> es una función que ya se explicó previamente, la cual retorna <code>ExceptT Error AppHandler [Post]</code>. Luego el operador bind (&gt;&gt;=) toma la monada retornada por la función <code>ExceptT Error AppHandler [Post]</code> y le pasa el valor monádico <code>[Post]</code> a función (\posts -&gt; concatAppHandlerList $ postsToPostsWithUser posts).</p>
+
+<p><code>postsToPostsWithUser</code> es una función que recibe un array de <code>Post</code> y retorna <code>[ExceptT Error AppHandler PostWithUser]</code> (un array de elementos del tipo <code>ExceptT Error AppHandler PostWithUser</code>).</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">postsToPostsWithUser</span> <span class="pl-k">::</span> [<span class="pl-en">Post</span>] <span class="pl-k">-&gt;</span> [<span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-en">PostWithUser</span>]
+postsToPostsWithUser posts = <span class="pl-c1">map</span> postToPostWithUser posts</pre></div>
+
+<p><code>postsToPostsWithUser</code> lo que hace es mapear el array de posts con la función <code>postToPostWithUser</code> (mediante la función <code>map</code>).</p>
+
+<p><code>postToPostWithUser</code> es una función que recibe <code>Post</code> y retorna <code>ExceptT Error AppHandler PostWithUser</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">postToPostWithUser</span> <span class="pl-k">::</span> <span class="pl-en">Post</span> <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-en">PostWithUser</span>
+postToPostWithUser post = <span class="pl-k">do</span>
+  user &lt;- getUserById $ <span class="pl-c1">show</span> $ user_id post
+  lift $ <span class="pl-c1">return</span> $ createPostWithUser post user</pre></div>
+
+<p>A ésta función la podemos reescribir de la siguiente manera:</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">postToPostWithUser</span> <span class="pl-k">::</span> <span class="pl-en">Post</span> <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-en">PostWithUser</span>
+postToPostWithUser post = (getUserById $ <span class="pl-c1">show</span> $ user_id post) &gt;&gt;= (\user -&gt; lift $ <span class="pl-c1">return</span> $ createPostWithUser post user)</pre></div>
+
+<p><code>(getUserById $ show $ user_id post)</code> es una función que primero con <code>(user_id post)</code> obtiene el <code>user_id</code> del post en cuestión, luego con la función <code>show</code> se convierte el <code>user_id</code> de <code>Int</code> a <code>String</code>, y por último se le envía dicho <code>String</code> como argumento a la función <code>getuserById</code>, la cual retorna <code>ExceptT Error AppHandler User</code>. Mediante el binding, éste valor se le pasa a la función <code>(\user -&gt; lift $ return $ createPostWithUser post user)</code>, la cual utiliza el valor monádico de aquél valor, siendo éste el <code>User</code>.</p>
+
+<p>La función <code>(\user -&gt; lift $ return $ createPostWithUser post user)</code> lo que hace es llamar con el <code>post</code> recibido por argumento y el <code>user</code> ya mencionado a la función <code>createPostWithUser</code>, la cual retorna <code>PostWithUser</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">createPostWithUser</span> <span class="pl-k">::</span> <span class="pl-en">Post</span> <span class="pl-k">-&gt;</span> <span class="pl-en">User</span> <span class="pl-k">-&gt;</span> <span class="pl-en">PostWithUser</span>
+createPostWithUser post user = <span class="pl-ent">PostWithUser</span> post user</pre></div>
+
+<p>Ahora sí, volviendo a la función <code>getPostsWithUser</code>, se le pasa como argumento el resultado de <code>postsToPostsWithUser posts</code> (siendo éste <code>[ExceptT Error AppHandler PostWithUser]</code>) a la función <code>concatAppHandlerList</code>, que se encarga de pasar a <code>ExceptT Error AppHandler [PostWithUser]</code>.</p>
+
+<hr>
+
+<p>Luego sigue la concatenación de handlers como ya se explicó previamente.</p>
+
+<h4>
+<a id="users" class="anchor" href="#users" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>/users</h4>
+
+<p>Éste endpoint retorna todos los usuarios de la base de datos.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-s"><span class="pl-pds">"</span>/users<span class="pl-pds">"</span></span>, method <span class="pl-ent">GET</span> $ headersHandler $ runHandler $ genericHandler $ usersIndexHandler</pre></div>
+
+<p>Se comienza llamando a la función <code>usersIndexHandler</code>, la cual no recibe ningún parámtero de entrada y retorna un valor del tipo <code>ExceptT Error AppHandler [User]</code>. Ésta función lo único que hace es llamar a la función <code>getUsers</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">usersIndexHandler</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">User</span>]
+usersIndexHandler = getUsers</pre></div>
+
+<p><code>getUsers</code> es una función que no recibe argumentos y retorna <code>ExceptT Error AppHandler [User]</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">getUsers</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> [<span class="pl-en">User</span>]
+getUsers = lift $ with pg $ query_ <span class="pl-s"><span class="pl-pds">"</span>SELECT id,email,<span class="pl-cce">\"</span>name<span class="pl-cce">\"</span>,password FROM users<span class="pl-pds">"</span></span></pre></div>
+
+<p>Similar a la función <code>getPosts</code>, la función <code>getUsers</code> realiza una query para obtener todos los usuarios de la base de datos. Utiliza la Snaplet de PostgreSql, y retorna un array de usuarios como un valor monádico de <code>AppHandler</code>, siendo el tipo retornado <code>AppHandler [User]</code> haciendo un lift de dicha mónada a <code>ExceptT Error AppHandler [User]</code>.</p>
+
+<hr>
+
+<p>Luego sigue la concatenación de handlers como ya se explicó previamente.</p>
+
+<h4>
+<a id="userid" class="anchor" href="#userid" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>/user/:id</h4>
+
+<p>Éste endpoint retorna la información del usuario con dicho <code>:id</code>. En caso de </p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-s"><span class="pl-pds">"</span>/user/:id<span class="pl-pds">"</span></span>, method <span class="pl-ent">GET</span> $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ userHandler</pre></div>
+
+<hr>
+
+<p>Se comienza llamando a la función <code>userHandler</code>, la cual recibe como argumento <code>User</code> y retorna <code>ExceptT Error AppHandler User</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">userHandler</span> <span class="pl-k">::</span> <span class="pl-en">User</span> <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-en">User</span>
+userHandler user = lift $ <span class="pl-c1">return</span> user</pre></div>
+
+<p>La función <code>userHandler</code> lo que hace es poner en el context <code>AppHanlder</code> al tipo <code>User</code>, quedando <code>AppHandler User</code>, y finaliza haciendo un lift de dicha mónada a <code>ExceptT Error AppHandler User</code>.</p>
+
+<hr>
+
+<div class="highlight highlight-source-haskell"><pre>userIdHandler $ handler</pre></div>
+
+<p><code>userIdHandler</code> es una función que recibe una función del tipo <code>(User -&gt; ExceptT Error AppHandler a)</code> y retorna un handler (mónada del tipo <code>ExceptT Error AppHandler a</code>).</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">userIdHandler</span> <span class="pl-k">::</span> (<span class="pl-en">User</span> <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-smi">a</span>) <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-smi">a</span>
+userIdHandler handler = <span class="pl-k">do</span>
+  user_id &lt;- lift $ getParam <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span>
+  user &lt;- <span class="pl-c1">maybe</span> (throwE <span class="pl-ent">NullId</span>) (\user_id -&gt; getUserById $ (byteStringToString user_id)) user_id
+  handler user</pre></div>
+
+<p>A ésta función la podemos reescribir de la siguiente manera:</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">userIdHandler</span> <span class="pl-k">::</span> (<span class="pl-en">User</span> <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-smi">a</span>) <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-smi">a</span>
+userIdHandler handler = (lift $ getParam <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span>) &gt;&gt;= (\user_id -&gt; (<span class="pl-c1">maybe</span> (throwE <span class="pl-ent">NullId</span>) (\user_id -&gt; getUserById $ (byteStringToString user_id)) user_id &gt;&gt;= (\user -&gt; handler user)))</pre></div>
+
+<p>La función <code>(lift $ getParam "id")</code> lo que hace es conseguir el parámetro <code>id</code> proveniente de la request mediante la función <code>getParam</code>, la cual retorna <code>AppHandler (Maybe ByteString)</code> y luego le hace un lift a <code>Except Error AppHandler (Maybe ByteString)</code>. Por medio del binding se le pasa el valor monádico a la función <code>(\user_id -&gt; (maybe (throwE NullId) (\user_id -&gt; getUserById $ (byteStringToString user_id)) user_id &gt;&gt;= (\user -&gt; handler user)))</code>. Comienza con la función <code>(maybe (throwE NullId) (\user_id -&gt; getUserById $ (byteStringToString user_id)) user_id</code>, que con la función <code>maybe</code>, en caso de que <code>user_id</code> sea <code>Nothing</code> retorna el error <code>NullId</code>, pero si <code>user_id</code> es <code>Just ByteString</code> entonces le pasa como argumento <code>user_id</code> a la función <code>(\user_id -&gt; getUserById $ (byteStringToString user_id))</code>, la cual convierte el <code>ByteString</code> de <code>user_id</code> a <code>String</code> para que lo reciba como argumento la función <code>getUserById</code>, la cual retorna <code>ExceptT Error AppHandler User</code>. Luego, mediante el operador bind la función <code>(\user -&gt; handler user)</code> recibe como argumento el valor monádico, siendo el mismo del tipo <code>User</code> y llama a la función <code>handler</code> con dicho <code>user</code>.</p>
+
+<hr>
+
+<div class="highlight highlight-source-haskell"><pre>catchHandler $ handler</pre></div>
+
+<p><code>catchHandler</code> es una función que recibe como argumento <code>ExceptT Error AppHandler a</code> y retorna <code>ExceptT Error AppHandler a</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">catchHandler</span> <span class="pl-k">::</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-smi">a</span> <span class="pl-k">-&gt;</span> <span class="pl-en">ExceptT</span> <span class="pl-en">Error</span> <span class="pl-en">AppHandler</span> <span class="pl-smi">a</span>
+catchHandler handler = handler <span class="pl-k">`catchE`</span> printError</pre></div>
+
+<p><code>catchHandler</code> hace uso de la función <code>catchE</code> llamada de forma infija.</p>
+
+<p><code>catchE</code> es una función que recibe como argumento un handler del tipo <code>ExceptT e m a</code>, una función del tipo <code>(e -&gt; ExceptT c m a)</code> y retorna <code>ExceptT c m a</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre>catchE <span class="pl-k">::</span> <span class="pl-en"><span class="pl-e">Monad</span></span> <span class="pl-smi">m</span> <span class="pl-k">=</span>&gt; <span class="pl-ent">ExceptT</span> e m a -&gt; (e -&gt; <span class="pl-ent">ExceptT</span> c m a) -&gt; <span class="pl-ent">ExceptT</span> c m a
+catchE handler errorHandler = <span class="pl-ent">ExceptT</span> $ <span class="pl-k">do</span>
+  x &lt;- runExceptT handler
+  <span class="pl-k">case</span> x <span class="pl-k">of</span>
+    <span class="pl-ent"><span class="pl-c1">Left</span></span> failure  -&gt; runExceptT (errorHandler failure)
+    <span class="pl-ent"><span class="pl-c1">Right</span></span> success -&gt; <span class="pl-c1">return</span> (<span class="pl-ent"><span class="pl-c1">Right</span></span> success)</pre></div>
+
+<p>Ésta función la podemos reescribir de la siguiente manera:</p>
+
+<div class="highlight highlight-source-haskell"><pre>catchE <span class="pl-k">::</span> <span class="pl-en"><span class="pl-e">Monad</span></span> <span class="pl-smi">m</span> <span class="pl-k">=</span>&gt; <span class="pl-ent">ExceptT</span> e m a -&gt; (e -&gt; <span class="pl-ent">ExceptT</span> c m a) -&gt; <span class="pl-ent">ExceptT</span> c m a
+catchE handler errorHandler = <span class="pl-ent">ExceptT</span> $ (runExceptT handler &gt;&gt;= (\x -&gt; <span class="pl-k">case</span> x <span class="pl-k">of</span>
+    <span class="pl-ent"><span class="pl-c1">Left</span></span> failure  -&gt; runExceptT (errorHandler failure)
+    <span class="pl-ent"><span class="pl-c1">Right</span></span> success -&gt; <span class="pl-c1">return</span> (<span class="pl-ent"><span class="pl-c1">Right</span></span> success)))</pre></div>
+
+<p>La función</p>
+
+<div class="highlight highlight-source-haskell"><pre>(runExceptT handler &gt;&gt;= (\x -&gt; <span class="pl-k">case</span> x <span class="pl-k">of</span>
+    <span class="pl-ent"><span class="pl-c1">Left</span></span> failure  -&gt; runExceptT (errorHandler failure)
+    <span class="pl-ent"><span class="pl-c1">Right</span></span> success -&gt; <span class="pl-c1">return</span> (<span class="pl-ent"><span class="pl-c1">Right</span></span> success)))</pre></div>
+
+<p>comienza con <code>runExceptT handler</code>, haciendo que del tipo <code>ExceptT e m a</code> pasemos a tener <code>m a</code>, en nuestro caso, pasamos del tipo <code>ExceptT Error AppHandler a</code> al tipo <code>AppHandler a</code>. Luego, ésto se pasa como argumento mediante el operador bind a la función</p>
+
+<div class="highlight highlight-source-haskell"><pre>(\x -&gt; <span class="pl-k">case</span> x <span class="pl-k">of</span>
+    <span class="pl-ent"><span class="pl-c1">Left</span></span> failure  -&gt; runExceptT (errorHandler failure)
+    <span class="pl-ent"><span class="pl-c1">Right</span></span> success -&gt; <span class="pl-c1">return</span> (<span class="pl-ent"><span class="pl-c1">Right</span></span> success))</pre></div>
+
+<p>Ésta función analiza el valor de <code>x</code>, y en caso de que sea <code>Left</code> se llama a la función <code>runExceptT (errorHandler failure)</code>, la cual le pasa como argumento el error (de tipo <code>Error</code>) a la función <code>errorHandler</code> (que recordemos que tenía el tipo <code>e -&gt; ExceptT c m a</code>, siendo nuestro caso <code>Error -&gt; ExceptT Error AppHandler a</code>), y luego se le pasa como argumento a la función <code>runExceptT</code> el retorno de la función <code>errorHandler</code> (siendo del tipo <code>ExceptT Error AppHandler a</code>), pasando al tipo <code>AppHandler a</code>. En caso de que sea <code>Right</code></p>
+
+<hr>
+
+<h3>
+<a id="inicialización-del-servidor" class="anchor" href="#inicializaci%C3%B3n-del-servidor" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Inicialización del servidor</h3>
+
+<p>El punto de entrada al programa es la función main, que tiene por tipo la monada IO.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">main</span> <span class="pl-k">::</span> <span class="pl-en"><span class="pl-c1">IO</span></span> <span class="pl-c1">()</span>
+main = <span class="pl-k">do</span>
+  (_, site, _) &lt;- runSnaplet <span class="pl-ent"><span class="pl-c1">Nothing</span></span> hashkitterInit
+  quickHttpServe site</pre></div>
+
+<p>La misma puede ser reescrita como</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">main</span> <span class="pl-k">::</span> <span class="pl-en"><span class="pl-c1">IO</span></span> <span class="pl-c1">()</span>
+main = runSnaplet <span class="pl-ent"><span class="pl-c1">Nothing</span></span> haskitterInit (\_ site _ -&gt; quickHttpServe site)</pre></div>
+
+<p>La función ejecutar <code>runSnaplet</code></p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">runSnaplet</span> <span class="pl-k">::</span> <span class="pl-en"><span class="pl-c1">Maybe</span></span> <span class="pl-en"><span class="pl-c1">String</span></span> <span class="pl-k">-&gt;</span> <span class="pl-en">SnapletInit</span> <span class="pl-smi">b</span> <span class="pl-smi">b</span> <span class="pl-k">-&gt;</span> <span class="pl-en"><span class="pl-c1">IO</span></span> (<span class="pl-en">Text</span>, <span class="pl-en">Snap</span> <span class="pl-c1">()</span>, <span class="pl-en"><span class="pl-c1">IO</span></span> <span class="pl-c1">()</span>)</pre></div>
+
+<p>Recibe un <code>Maybe String</code>, y un inicializador de <code>Snaplet</code> (<code>SnapletInit</code>). el string indica cuales son los nombres de los archivos de configuración tuilizados por cada Snaplet y en caso de recibir Nothing se utiliza <code>Just "devel"</code>. <code>runSnap</code> retorna una monada IO cuyos valores monádicos son</p>
+
+<ul>
+<li>
+<code>Text</code> la concatenación de todos los logs durante la inicialización</li>
+<li>
+<code>Snap ()</code> el handler de <code>Snap</code> que ha sido extendido por nuestros handlers de tipo <code>MonadSnap</code>
+</li>
+<li>
+<code>IO ()</code> una acción de limpieza en ante el shutdown de la aplicación</li>
+</ul>
+
+<p>Luego el handler snap es pasado como parametro mediante el operador bind <code>&gt;&gt;=</code> a la función <code>(\_ handler _ -&gt; quickHttpServe handler)</code> que comienza el servidor HTTP utilizando el handler pasado por parametro. Los parametros para la configuración del servidor son obtenidos por la linea de comandos.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">quickHttpServe</span> <span class="pl-k">::</span> <span class="pl-en">Snap</span> <span class="pl-c1">()</span> <span class="pl-k">-&gt;</span> <span class="pl-en"><span class="pl-c1">IO</span></span> <span class="pl-c1">()</span></pre></div>
+
+<p>SnapletInit <code>quickHttpServe</code> no retorna nunca. Si se quiere apagar el servidor se debe matar el thread que lo corre.</p>
+
+<p><code>haskitterInit</code> es la función pasada como segundo parametro a <code>runSnaplet</code>. <code>haskitterInit</code> no recibe ningun parametro y retorna <code>SnapletInit Haskitter Haskitter</code>. Por otro lado el tipo <code>SnapletInit b v</code> se utiliza para obtener garantias en tiempo de compliación de que la <code>Snaplet</code> fue creada utilizando <code>makeSnaplet</code>, <code>nestSnaplet</code> o <code>embedSnaplet</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">haskitterInit</span> <span class="pl-k">::</span> <span class="pl-en">SnapletInit</span> <span class="pl-en">Haskitter</span> <span class="pl-en">Haskitter</span>
+haskitterInit = makeSnaplet <span class="pl-s"><span class="pl-pds">"</span>haskitter<span class="pl-pds">"</span></span> <span class="pl-s"><span class="pl-pds">"</span>A simple twitter api written in Haskell<span class="pl-pds">"</span></span> <span class="pl-ent"><span class="pl-c1">Nothing</span></span> $ <span class="pl-k">do</span>
+  p &lt;- nestSnaplet <span class="pl-s"><span class="pl-pds">"</span>pg<span class="pl-pds">"</span></span> pg pgsInit
+  addRoutes routes
+  <span class="pl-c1">return</span> $ <span class="pl-ent">Haskitter</span> { _pg = p}</pre></div>
+
+<p><code>haskitterInit</code> se puede rescribir cómo</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">haskitterInit</span> <span class="pl-k">::</span> <span class="pl-en">SnapletInit</span> <span class="pl-en">Haskitter</span> <span class="pl-en">Haskitter</span>
+haskitterInit = makeSnaplet <span class="pl-s"><span class="pl-pds">"</span>haskitter<span class="pl-pds">"</span></span> <span class="pl-s"><span class="pl-pds">"</span>A simple twitter api written in Haskell<span class="pl-pds">"</span></span> <span class="pl-ent"><span class="pl-c1">Nothing</span></span> (nestSnaplet <span class="pl-s"><span class="pl-pds">"</span>pg<span class="pl-pds">"</span></span> pg pgsInit &gt;&gt;= (\p -&gt; addRoutes routes &gt;&gt; <span class="pl-c1">return</span> $ <span class="pl-ent">Haskitter</span> { _pg = p}))  </pre></div>
+
+<p><code>haskitterInit</code> ejecuta <code>makeSnaplet</code> que recibe</p>
+
+<ul>
+<li>
+<code>Text</code> un id para identificar al <code>Snaplet</code><br>
+</li>
+<li>
+<code>Text</code> una descripción del <code>Snaplet</code>
+</li>
+<li>
+<code>Maybe (IO FilePath)</code> el path al directorio root de para la <code>Snaplet</code>
+
+<ul>
+<li>En nuestro caso utilizamos <code>Nothing</code>, por lo que la <code>Snaplet</code> no copiará los archivos que genera automáticamente a ese directorio.</li>
+</ul>
+</li>
+<li>
+<code>Initializer b v v</code> el inicializador de la <code>Snaplet</code>.</li>
+</ul>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">makeSnaplet</span> <span class="pl-k">::</span> <span class="pl-en">Text</span> <span class="pl-k">-&gt;</span> <span class="pl-en">Text</span> <span class="pl-k">-&gt;</span> <span class="pl-k">-&gt;</span> <span class="pl-en"><span class="pl-c1">Maybe</span></span> (<span class="pl-en"><span class="pl-c1">IO</span></span> <span class="pl-en"><span class="pl-c1">FilePath</span></span>) <span class="pl-k">-&gt;</span> <span class="pl-en">Initializer</span> <span class="pl-smi">b</span> <span class="pl-smi">v</span> <span class="pl-smi">v</span> <span class="pl-k">-&gt;</span> <span class="pl-en">SnapletInit</span> <span class="pl-smi">b</span> <span class="pl-smi">v</span></pre></div>
+
+<p>El inicializador de la <code>Snaplet</code> se obtiene como retorno de la función <code>nestSnaplet "pg" pg pgsInit &gt;&gt;= (\p -&gt; addRoutes routes &gt;&gt; return $ Haskitter { _pg = p})</code>. Luego makeSnaplet toma el <code>Initializer b v v</code> como parametro y retorna un <code>SnapInit Haskitter Haskitter</code>.</p>
+
+<p>Analizemos la función <code>nestSnaplet "pg" pg pgsInit &gt;&gt;= (\p -&gt; addRoutes routes &gt;&gt; return $ Haskitter { _pg = p})</code> que retorna el <code>Initializer b v v</code> en detalle.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">nestSnapletSource</span> <span class="pl-k">::</span> <span class="pl-en">ByteString</span> <span class="pl-k">-&gt;</span> <span class="pl-en">SnapletLens</span> <span class="pl-smi">v</span> <span class="pl-smi">v1</span> <span class="pl-k">-&gt;</span> <span class="pl-en">SnapletInit</span> <span class="pl-smi">b</span> <span class="pl-smi">v1</span> <span class="pl-k">-&gt;</span> <span class="pl-en">Initializer</span> <span class="pl-smi">b</span> <span class="pl-smi">v</span> (<span class="pl-en">Snaplet</span> <span class="pl-smi">v1</span>)</pre></div>
+
+<p><code>nestSnapletSource</code> recibe  </p>
+
+<ul>
+<li>
+<code>ByteString</code> una url que simboloza la ruta de la <code>Snaplet</code>
+</li>
+<li>
+<code>SnapletLens</code> el lens que identifca a la <code>Snaplet</code>
+</li>
+<li>
+<code>SnapInit</code> la función inicializadora uan <code>Snaplet</code>
+</li>
+</ul>
+
+<p><code>nestSnapletSource</code> ejecuta el incializar y retorna la <code>Snaplet</code> inicializada. Al usar <code>nestSnapletSource</code> permitimos que la <code>Snaplet</code> anidada tenga acceso al estado base de la <code>Snaplet</code> actual. Por lo tanto en la función <code>nestSnaplet "pg" pg pgsInit</code> estas permitiendo que la <code>Snaplet</code> <code>pg</code> tenga acceso al estado base de la <code>Snaplet</code> <code>Snap</code>.</p>
+
+<p>El valor monadico de la <code>Snaplet</code> (<code>Monad</code>) inicializada retornada por <code>nestSnaplet "pg" pg pgsInit</code> es recibida por parametro por la función  <code>(\p -&gt; addRoutes routes &gt;&gt; return $ Haskitter { _pg = p})</code> por el operador bind <code>&gt;&gt;=</code>.</p>
+
+<div class="highlight highlight-source-haskell"><pre><span class="pl-en">addRoutes</span> <span class="pl-k">::</span> [(<span class="pl-en">ByteString</span>, <span class="pl-en">Handler</span> <span class="pl-smi">b</span> <span class="pl-smi">v</span> <span class="pl-c1">()</span><span class="pl-k">)]</span> <span class="pl-k">-&gt;</span> <span class="pl-en">Initializer</span> <span class="pl-smi">b</span> <span class="pl-smi">v</span> <span class="pl-c1">()</span></pre></div>
+
+<p><code>addRoutes</code> agrega routeo al handler actual, y se mergea con el ruteo principal. Como el ruteo principal esta definido como "/", si se ejecuta <code>addRoutes :: [("/handler", handler)]</code> el ruteo de <code>handler</code> será "/handler".  </p>
+
+<p>El inicializador (<code>Monad</code>) retornado por <code>addRoutes</code> es pasado por parametro a la función <code>return $ Haskitter { _pg = p})</code>, que accede a p del contexto de la <code>Monad</code> e inicializa la <code>Snaplet</code> <code>Haskitter</code>, retornado un <code>Initializer</code>. Este <code>Initializer</code> es utilizado por makeSnaplet para retonar un <code>SnapletInit</code> para inicializar la <code>Snaplet</code>, que será el servidor.</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/lkania/Haskitter">Haskitter</a> is maintained by <a href="https://github.com/lkania">lkania</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
