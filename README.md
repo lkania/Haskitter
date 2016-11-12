@@ -44,7 +44,7 @@ ___
 genericHandler $ handler
 ```
 
-`genericHandler` es una función que recibe un handler (mónada del tipo `ExceptT Error AppHandler a`) y retorna un handler (mónada del tipo `ExceptT Error AppHandler ()`). 
+`genericHandler` es una función que recibe un handler (mónada del tipo `ExceptT Error AppHandler a`) y retorna un handler (mónada del tipo `ExceptT Error AppHandler ()`).
 
 ```haskell
 genericHandler :: ToJSON a => ExceptT Error AppHandler a -> ExceptT Error AppHandler ()
@@ -132,13 +132,13 @@ class (Monad m) => MonadSnap m where
 liftSnap :: Snap a -> m a
 ```
 
-Ahora bien, ¿cómo estamos accediendo a `Snap` en el handler? Uno esperaría que obtengamos la monada `Snap`, modifiquemos el contexto a traves de ella y luego realizemos `liftSnap` para obtener la `MonadSnap` de nuevo. Esto no se ve en en handler debido a que utilizamos la función `writeLBS`. 
+Ahora bien, ¿cómo estamos accediendo a `Snap` en el handler? Uno esperaría que obtengamos la monada `Snap`, modifiquemos el contexto a traves de ella y luego realizemos `liftSnap` para obtener la `MonadSnap` de nuevo. Esto no se ve en en handler debido a que utilizamos la función `writeLBS`.
 
 ```haskell
 writeLBS :: MonadSnap m => ByteString -> m ()
 ```
 
-`writeLBS` oculta este comportamiento y escribe el string en el body de la HTTP Response. 
+`writeLBS` oculta este comportamiento y escribe el string en el body de la HTTP Response.
 
 Todo handler se agrega en `routes` de la siguiente manera:
 
@@ -170,7 +170,7 @@ postsWitUserIndexHandler :: ExceptT Error AppHandler [PostWithUser]
 postsWitUserIndexHandler = getPostsWithUser
 ```
 
-`getPostsWithUser` es una función que no recibe parámetro de entrada y retorna `ExceptT Error AppHandler [PostWithUser]`. 
+`getPostsWithUser` es una función que no recibe parámetro de entrada y retorna `ExceptT Error AppHandler [PostWithUser]`.
 
 ```haskell
 getPostsWithUser :: ExceptT Error AppHandler [PostWithUser]
@@ -258,7 +258,7 @@ Luego sigue la concatenación de handlers como ya se explicó previamente.
 
 #### /user/:id
 
-Éste endpoint retorna la información del usuario con dicho `:id`. En caso de 
+Éste endpoint retorna la información del usuario con dicho `:id`. En caso de
 
 ```haskell
 "/user/:id", method GET $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ userHandler
@@ -351,7 +351,99 @@ comienza con `runExceptT handler`, haciendo que del tipo `ExceptT e m a` pasemos
     Right success -> return (Right success))
 ```
 
-Ésta función analiza el valor de `x`, y en caso de que sea `Left` se llama a la función `runExceptT (errorHandler failure)`, la cual le pasa como argumento el error (de tipo `Error`) a la función `errorHandler` (que recordemos que tenía el tipo `e -> ExceptT c m a`, siendo nuestro caso `Error -> ExceptT Error AppHandler a`), y luego se le pasa como argumento a la función `runExceptT` el retorno de la función `errorHandler` (siendo del tipo `ExceptT Error AppHandler a`), pasando al tipo `AppHandler a`. En caso de que sea `Right`
+Ésta función analiza el valor de `x`, y en caso de que sea `Left` se llama a la función `runExceptT (errorHandler failure)`, la cual le pasa como argumento el error (de tipo `Error`) a la función `errorHandler` (que recordemos que tenía el tipo `e -> ExceptT c m a`, siendo nuestro caso `Error -> ExceptT Error AppHandler a`), y luego se le pasa como argumento a la función `runExceptT` el retorno de la función `errorHandler` (siendo del tipo `ExceptT Error AppHandler a`), pasándolo al tipo `AppHandler a`. Ahora, en caso de que sea `Right` se llama a `Right` del parámetro `success` y se lo pone en el contexto de `AppHandler` con la función `return`.
+
+Por úlitmo mediante `ExceptT $` se crea el tipo de dato `ExceptT c m a`, siendo el caso de la función `catchHandler` `ExceptT Error AppHandler a`.
+
+La función `catchHandler` hace uso de la función `printError`, la cual recibe como argumento el tipo de dato `Error` y retorna el tipo de dato `ExceptT Error AppHandler a`.
+
+```haskell
+printError :: Error -> ExceptT Error AppHandler a
+printError err = do
+  lift . writeBS . getJSONError $ case err of
+    NullId ->  "User id is null"
+    NoSuchUser -> "User does not exist"
+    EmailAlreadyTaken -> "Email already taken"
+    NullEmail -> "User email is null"
+    NullName -> "User name is null"
+    NullPassword -> "User password is null"
+    NullPasswordConfirmation -> "User password confirmation is null"
+    PasswordConfirmationMissmatch -> "There was a missmatch between user password and user password confirmation"
+    NullMessage -> "User message is null"
+    NullFollowerId -> "Follower id is null"
+    InvalidDelete -> "Invalid delete"
+    InvalidFollow -> "Invalid follow"
+  throwE err
+```
+
+`printError` tiene definidos todos los mensajes de error de la API mapeados con sus respectivos tipos de error.
+
+Comienza con la función
+
+```haskell
+case err of
+    NullId ->  "User id is null"
+    NoSuchUser -> "User does not exist"
+    EmailAlreadyTaken -> "Email already taken"
+    NullEmail -> "User email is null"
+    NullName -> "User name is null"
+    NullPassword -> "User password is null"
+    NullPasswordConfirmation -> "User password confirmation is null"
+    PasswordConfirmationMissmatch -> "There was a missmatch between user password and user password confirmation"
+    NullMessage -> "User message is null"
+    NullFollowerId -> "Follower id is null"
+    InvalidDelete -> "Invalid delete"
+    InvalidFollow -> "Invalid follow"
+```
+
+La misma define un `case` en la que dependiendo del error retorna el `BS.ByteString` correspondiente. Luego, éste mismo se pasa como argumento a la función `getJSONError`, la cual recibe como argumento un dato del tipo `BS.ByteString` y retorna `BS.ByteString`.
+
+```haskell
+getJSONError :: BS.ByteString -> BS.ByteString
+getJSONError error = "{\"error\": \"" `BS.append` error `BS.append` "\"}"
+```
+
+`getJSONError` concatena mediante la función `BS.append` el mensaje de error con el formato de la respuesta tipo _json_, retornando algo de la forma:
+
+```json
+{
+    error: "mensaje del error"
+}
+```
+
+Siguiendo con la función `printError`, lo que retorna la función `getJSONError` se pasa como parámetro a la función `writeBS`, la cual escribe en el body de la HTTP response, retornando `AppHandler ()`, el cual lifteamos para retornar `ExceptT Error AppHandler ()`.
+
+Por último se llama a la función `throwE` con el tipo de error que se le pasó como argumento a la función `printError`, retornando el tipo `ExceptT Error AppHandler a` satisfaciendo la notación `do`.
+
+`throwE` recibe como argumento un tipo genérico `e` y retorna el tipo `ExceptT e m a`, obligando a `m` en su declaración de tipos a que sea del tipo `Monad`.
+
+```haskell
+throwE :: Monad m => e -> ExceptT e m a
+throwE x = liftEither (Left x)
+```
+
+La función `throwE` le pasa como argumento `Left x` a la función `liftEither`, sabiendo que `Left x` contiene el error que se quiere lanzar.
+
+La función `liftEither` recibe un tipo `Either e a` y retorna `ExceptT e m a`, obligando a `m` en su declaración de tipos a que sea del tipo `Monad`.
+
+```haskell
+liftEither :: Monad m => Either e a -> ExceptT e m a
+liftEither x = ExceptT (return x)
+```
+
+`return x` lo que hace es poner en contexto al tipo `Either e a` con la mónada `m` de la manera `m (Either e a)` para luego pasarsela como argumento a la función `ExceptT`, de la forma `ExceptT m (Either e a)`, devolviendo el tipo `ExceptT e m a`.
+
+Ésto se logra debido a la forma de construir el tipo `ExceptT` mediante _record syntax_ (siendo ésta una especie de _sugar syntax_). Al definirlo de dicha manera obtenemos los siguientes métodos:
+
+```haskell
+ExceptT :: m (Either e a) -> ExceptT e m a
+
+runExceptT :: ExceptT e m a -> m (Either e a)
+```
+
+Podemos ver que `ExceptT` recibe como argumento el tipo que `runExceptT` retorna, y además retorna el tipo que `runExceptT` recibe como argumento. A ésto se le dice que son funciones isomórficas.
+
+> Hay que tener en cuenta que volvimos a recrear ExceptT por propositos educacionales, pero el mismo se puede conseguir en el paquete `Control.Monad.Except`.
 
 ___
 ### Inicialización del servidor
