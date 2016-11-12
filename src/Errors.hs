@@ -27,10 +27,10 @@ throwE :: Monad m => e -> ExceptT e m a
 throwE x = liftEither (Left x)
 
 catchE :: Monad m => ExceptT e m a -> (e -> ExceptT c m a) -> ExceptT c m a
-catchE throwing handler = ExceptT $ do
-  x <- runExceptT throwing
+catchE handler errorHandler = ExceptT $ do
+  x <- runExceptT handler
   case x of
-    Left failure  -> runExceptT (handler failure)
+    Left failure  -> runExceptT (errorHandler failure)
     Right success -> return (Right success)
 
 ---
