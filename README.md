@@ -1,3 +1,38 @@
+
+# Snap
+
+`Snap` es un framework de desarrollo web escrito en Haskell.
+
+`Snap` en si, es una monada en la cual podremos integrar `Handler` que atiendan diferentes rutas.
+La misma provee un contexto que permite a cada `Handler`
+
+* acceder o modificar una HTTP Request
+* acceder o modificar una HTTP Response
+* setear un tiempo maximo de inactividad para cada thread  
+
+Mediante la utilización de `MonadSnap` podemos extener el funcionamiento de la monada `Snap`, su funcionamiento es equivalente a `MonadIO` permitiendonos acceder a la monada `Snap` en cualquier momento.
+
+Una de las grandes decisiones de `Snap`, fue la creación de `Saplet`. La misma es una aplicaición web, por lo que podemos desarrollar nuestros aplicaciones web de forma modular y componiendo aplicaciones web. Todo el servicio de Haskitter que desarrollaremos en este trabajo será una `Snaplet` que puede ser reutilizada por cualquier otra aplicaciòn web y que a su vez utiliza otras `Snaplet`, en nuestro caso una que nos permite la comunicación con una base de datos PostgreSQL.
+
+Una `Snaplet` nos provee de
+
+1. **Requerimiento de estado local**
+
+  Cada `Snaplet` definira cual es el estado que estará disponible durante el procesamiento de la request. El estado deberá ser mutable.
+
+2. **Composición**
+
+  Las `Snaplet` deben poder componerse entre ellas, y debe ser posible construir nuevas a partir de su composicón.
+
+3. **Disponibilidad**
+
+  El estado de la aplicación web debe estar disponible sin necesidad de ser pasado por parametro.
+
+Cada `Snaplet` tiene su dierctorio de donde leer la configuración y almacenar archivos. y propio `Initializer` que decide como interpretar la configraución inicial, decide que URLs se manejaran y establece el estado incial de la `Snaplet`. Además cada una tendra estados en memoria definidos por el usuario a través de un sumple Haskell Record.
+
+
+## Análisis del proyecto
+
 Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers.
 
 Éstas son todas las rutas que tiene la API:
@@ -44,7 +79,7 @@ ___
 genericHandler $ handler
 ```
 
-`genericHandler` es una función que recibe un handler (mónada del tipo `ExceptT Error AppHandler a`) y retorna un handler (mónada del tipo `ExceptT Error AppHandler ()`). 
+`genericHandler` es una función que recibe un handler (mónada del tipo `ExceptT Error AppHandler a`) y retorna un handler (mónada del tipo `ExceptT Error AppHandler ()`).
 
 ```haskell
 genericHandler :: ToJSON a => ExceptT Error AppHandler a -> ExceptT Error AppHandler ()
@@ -132,13 +167,13 @@ class (Monad m) => MonadSnap m where
 liftSnap :: Snap a -> m a
 ```
 
-Ahora bien, ¿cómo estamos accediendo a `Snap` en el handler? Uno esperaría que obtengamos la monada `Snap`, modifiquemos el contexto a traves de ella y luego realizemos `liftSnap` para obtener la `MonadSnap` de nuevo. Esto no se ve en en handler debido a que utilizamos la función `writeLBS`. 
+Ahora bien, ¿cómo estamos accediendo a `Snap` en el handler? Uno esperaría que obtengamos la monada `Snap`, modifiquemos el contexto a traves de ella y luego realizemos `liftSnap` para obtener la `MonadSnap` de nuevo. Esto no se ve en en handler debido a que utilizamos la función `writeLBS`.
 
 ```haskell
 writeLBS :: MonadSnap m => ByteString -> m ()
 ```
 
-`writeLBS` oculta este comportamiento y escribe el string en el body de la HTTP Response. 
+`writeLBS` oculta este comportamiento y escribe el string en el body de la HTTP Response.
 
 Todo handler se agrega en `routes` de la siguiente manera:
 
@@ -170,7 +205,7 @@ postsWitUserIndexHandler :: ExceptT Error AppHandler [PostWithUser]
 postsWitUserIndexHandler = getPostsWithUser
 ```
 
-`getPostsWithUser` es una función que no recibe parámetro de entrada y retorna `ExceptT Error AppHandler [PostWithUser]`. 
+`getPostsWithUser` es una función que no recibe parámetro de entrada y retorna `ExceptT Error AppHandler [PostWithUser]`.
 
 ```haskell
 getPostsWithUser :: ExceptT Error AppHandler [PostWithUser]
@@ -258,7 +293,7 @@ Luego sigue la concatenación de handlers como ya se explicó previamente.
 
 #### /user/:id
 
-Éste endpoint retorna la información del usuario con dicho `:id`. En caso de 
+Éste endpoint retorna la información del usuario con dicho `:id`. En caso de
 
 ```haskell
 "/user/:id", method GET $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ userHandler
@@ -443,3 +478,32 @@ addRoutes :: [(ByteString, Handler b v ())] -> Initializer b v ()
 `addRoutes` agrega routeo al handler actual, y se mergea con el ruteo principal. Como el ruteo principal esta definido como "/", si se ejecuta `addRoutes :: [("/handler", handler)]` el ruteo de `handler` será "/handler".  
 
 El inicializador (`Monad`) retornado por `addRoutes` es pasado por parametro a la función `return $ Haskitter { _pg = p})`, que accede a p del contexto de la `Monad` e inicializa la `Snaplet` `Haskitter`, retornado un `Initializer`. Este `Initializer` es utilizado por makeSnaplet para retonar un `SnapletInit` para inicializar la `Snaplet`, que será el servidor.
+
+### Estado de la Snaplet
+
+En `Aplication.hs` definimos el tipo `Haskitter` que es la `Snaplet` global de nuestro proyecto.
+
+```Haskell
+data Haskitter = Haskitter
+    { _pg   :: Snaplet Postgres }
+
+makeLenses ''Haskitter
+
+```
+
+`makeLenses` simplemente genera un `Lens` para cada campo de la `Snaplet` que comienza con un `_`. Un `Lens` puede entender como una referencia en el paradigma funcional, que nos permite consultar y setear valores del mismo. El `Lens` de `pg` fue utilizado durante todo el desarrollo para poder acceder a la `Snaplet Postgres` y asi poder consultar y escribir la base de datos.
+
+```Haskell
+type AppHandler = Handler Haskitter Haskitter
+```
+
+Por último quisieramos aclarar que el tipo `AppHanlder` comentado durante el desarrollo, es solamente un alias de `Handler Haskitter Haskitter`, es decir, un web `Handler` que recibe una `Snaplet` `Haskitter` y retorna una `Snaplet` `Haskitter`.
+
+
+### Bibliografía
+
+* [Snap Package - Hackage](https://hackage.haskell.org/package/snap-core-1.0.0.0/docs/Snap-Core.html)
+* [Snaplet Package - Hackage](https://hackage.haskell.org/package/snap-1.0.0.1/docs/Snap-Snaplet.html)
+* [Lenses, Folds, and Traversals - Edward Kmett](https://www.youtube.com/watch?v=cefnmjtAolY&feature=youtu.be&hd=1)
+* [A Little Lens Starter Tutorial - School of Haskell](https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/a-little-lens-starter-tutorial)
+* [Difference between makeLenses and makeFields](http://stackoverflow.com/questions/25585650/whats-the-difference-between-makelenses-and-makefields)
