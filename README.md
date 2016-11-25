@@ -1,3 +1,43 @@
+# Introducción
+
+El objetivo del trabajo práctico fue el de desarrollar una _Web API_ aplicando los conceptos aprendidos a lo largo de la materia.
+
+Para el desarrollo de la misma se utilizó **Snap**, un framework Web escrito en Haskell el cual contiene una librería para el manejo del protocolo HTTP.
+
+La API desarrollada responde a un modelo parecido a Twitter (de ahí proviene la derivación del nombre **Haskitter**, Haskell y Twitter). La misma permite crear usuarios, publicar tweets (publicaciones), seguir a otros usuarios y otras acciones que se detallarán a lo largo del informe.
+
+# Esquema de la base de datos y modelos
+
+La API responde a toda request en formato JSON, y tal como se mencionó en la introducción, la misma maneja usuarios, publicaciones y relaciones entre distintos usuarios. Es por esto que la misma debe tener una forma de persistir dicha información. Para lograr ésto se utilizó la base de datos relacional **PostgreSQL**, definiendo 3 tablas: `Users`, `Posts` y `Relationships`.
+
+El archivo *pg_haskitter.sql* detalla el esquema de la base de datos. A continuación vamos a detallar sus tablas.
+
+### Users
+
+|      id     |         email         |          name         |  password         |          created_at         |
+|:-----------:|:---------------------:|:---------------------:|:-----------------:|:---------------------------:|
+| [PK] serial | character varying(64) | character varying(70) | character varying | timestamp without time zone |
+
+- Tiene un UNIQUE INDEX en la columna `email`.
+
+### Posts
+
+|      id     | message                | user_id |           created_at        |
+|:-----------:|------------------------|---------|:---------------------------:|
+| [PK] serial | character varying(140) | integer | timestamp without time zone |
+
+- Tiene una FOREIGN KEY en la columna `user_id` que hace referencia al `id` de la tabla `Users`.
+- Tiene un INDEX en la columna `user_id`.
+
+### Relationships
+
+|      id     | follower_id | followed_id |          created_at         |
+|:-----------:|:-----------:|:-----------:|:---------------------------:|
+| [PK] serial |   integer   |   integer   | timestamp without time zone |
+
+- Tiene un INDEX en la columna `follower_id`.
+- It has an INDEX en la columna `followed_id`.
+- Tiene un UNIQUE INDEX entre las columnas `follower_id` y `followed_id`.
 
 # Snap
 
@@ -30,8 +70,11 @@ Una `Snaplet` nos provee de
 
 Cada `Snaplet` tiene su dierctorio de donde leer la configuración y almacenar archivos. y propio `Initializer` que decide como interpretar la configraución inicial, decide que URLs se manejaran y establece el estado incial de la `Snaplet`. Además cada una tendra estados en memoria definidos por el usuario a través de un sumple Haskell Record.
 
+# Conceptos claves
 
-## Análisis del proyecto
+Antes de comenzar con el análisis del proyecto vamos a
+
+# Análisis del proyecto
 
 Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers.
 
@@ -46,6 +89,8 @@ Cada ruta llama a su correspondiente handler, el cual está compuesto por una co
     - /follow
     - /signup
     - /user/:id
+
+A continuación vamos a detallar el flujo desde que llega una _http request_ hasta que se retorna la _http respsonse_ para cada endpoint.
 
 #### /posts
 
