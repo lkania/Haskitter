@@ -146,11 +146,10 @@ signUpHandler = do
     else (do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
 
 signUpNoSuchUserHandler :: String -> String -> String -> Error -> ExceptT Error AppHandler User
-signUpNoSuchUserHandler user_email user_name user_password err = do
+signUpNoSuchUserHandler user_email user_name user_password err = -- do
   case err of
     NoSuchUser -> signUp user_email user_name user_password
-    EmailAlreadyTaken -> throwE EmailAlreadyTaken
-  throwE err
+    _ -> throwE err
 
 deleteHandler :: User -> ExceptT Error AppHandler User
 deleteHandler user = do

@@ -65,7 +65,6 @@ subscribe follower followed = do
   lift $ with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)
   lift . return $ Follow (uid follower) (uid followed)
 
--- TODO: When a new user is created the function is returning NoSuchUser
 signUp :: String -> String -> String -> ExceptT Error AppHandler User
 signUp user_email user_name user_password = do
   lift $ with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)
