@@ -199,19 +199,19 @@ Cada ruta llama a su correspondiente handler, el cual está compuesto por una co
 
 Éstas son todas las rutas que tiene la API:
 
-    - /posts
-    - /postsWithUser
-    - /users
-    - /user/:id
-    - /feed/:id
-    - /post
-    - /follow
-    - /signup
-    - /user/:id
+    GET /posts
+    GET /postsWithUser
+    GET /users
+    GET /user/:id
+    GET /feed/:id
+    POST /post
+    POST /follow
+    POST /signup
+    DELETE /user/:id
 
 A continuación vamos a detallar el flujo desde que llega una _http request_ hasta que se retorna la _http respsonse_ para cada endpoint.
 
-#### /posts
+#### GET /posts
 
 Éste endpoint retorna todos los posts de la base de datos.
 
@@ -352,7 +352,7 @@ routes = [
 
 Todo handler está en el array que es retornado por la función constante `routes`.
 
-#### /postsWithUser
+#### GET/postsWithUser
 
 Éste endpoint retorna todos los posts de la base de datos con el usuario que los creó asociado.
 
@@ -427,7 +427,7 @@ ___
 
 Luego sigue la concatenación de handlers como ya se explicó previamente.
 
-#### /users
+#### GET /users
 
 Éste endpoint retorna todos los usuarios de la base de datos.
 
@@ -455,7 +455,7 @@ ___
 
 Luego sigue la concatenación de handlers como ya se explicó previamente.
 
-#### /user/:id
+#### GET /user/:id
 
 Éste endpoint retorna la información del usuario con dicho `:id`. En caso de
 
@@ -644,7 +644,7 @@ Podemos ver que `ExceptT` recibe como argumento el tipo que `runExceptT` retorna
 
 > Hay que tener en cuenta que volvimos a recrear ExceptT por propositos educacionales, pero el mismo se puede conseguir en el paquete `Control.Monad.Except`.
 
-### feed/:id
+#### GET feed/:id
 
 Éste endpoint retorna todos los posts de los usuarios que el usuario sigue.
 
@@ -717,6 +717,16 @@ getPostByUserId userId = do
 La misma llama a `getPosts` (ya explicada) que retorna todos los posts de la base de datos. Luego mediante la función `filter` se queda con los posts cuyo `user_id` coincida con el `userId` enviado como argumento a la función. Por útlimo a dicho array se lo pone en contexto con `AppHandler` mediante el `return`, y se le hace un `lift` para llevarlo a `ExceptT Error AppHandler [Post]`.
 
 Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos valores obtenemos un array de `ExceptT Error AppHandler [Post]`, siendo con la función `concatListAppHandlerList` la que nos lo convierte a `ExceptT Error AppHandler [Post]`, siendo lo que finalmente retorna la función, para luego así seguir con el flujo de handlers.
+
+#### DELETE /user/:id
+
+Éste endpoint se
+
+```haskell
+"/user/:id", method DELETE $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ deleteHandler
+```
+
+
 
 ___
 ### Inicialización del servidor
