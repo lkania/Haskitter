@@ -644,6 +644,80 @@ Podemos ver que `ExceptT` recibe como argumento el tipo que `runExceptT` retorna
 
 > Hay que tener en cuenta que volvimos a recrear ExceptT por propositos educacionales, pero el mismo se puede conseguir en el paquete `Control.Monad.Except`.
 
+### feed/:id
+
+Éste endpoint retorna todos los posts de los usuarios que el usuario sigue.
+
+```haskell
+"/feed/:id", method GET $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ feedHandler
+```
+___
+
+Se comienza llamando a la función `feedHandler`, la cual recibe como argumento `User` y retorna `ExceptT Error AppHandler [Post]`.
+
+```haskell
+feedHandler :: User -> ExceptT Error AppHandler [Post]
+feedHandler user = getFollowedPostsByUserId user
+```
+
+La función lo que hace es llamar a la función `getFollowedPostsByUserId` con el argumento `user` recibido como parámetro de `feedHandler`.
+
+`getFollowedPostsByUserId` recibe como argumento `User` y retorna `ExceptT Error AppHandler [Post]`.
+
+```haskell
+getFollowedPostsByUserId :: User -> ExceptT Error AppHandler [Post]
+getFollowedPostsByUserId user = do
+  follows <- getFollowedsById user
+  concatListAppHandlerList $ map (\follow -> getPostByUserId $ followed_id follow) follows
+```
+
+Vemos que ésta función está escrita con la _do notation_, por lo que también la podemos escribir de la siguiente manera:
+
+```haskell
+getFollowedPostsByUserId :: User -> ExceptT Error AppHandler [Post]
+getFollowedPostsByUserId user = (getFollowedsById user) >>= (\follows -> concatListAppHandlerList $ map (\follow -> getPostByUserId $ followed_id follow) follows)
+```
+
+Se comienza llamando a la función `getFollowedsById` con `user` como parámetro. La misma recibe como argumento (como se puede ver por el parámetro que se le pasó) un `User`, retornando `ExceptT Error AppHandler [Follow]`
+
+```haskell
+getFollowedsById :: User -> ExceptT Error AppHandler [Follow]
+getFollowedsById user = do
+  follows <- getFollows
+  (lift . return) $ filter (\follow -> (follower_id follow) == (uid user)) follows
+```
+
+También se encuentra escrita con _do notation_, por lo que la misma se puede escribir de la siguiente forma:
+
+```haskell
+getFollowedsById :: User -> ExceptT Error AppHandler [Follow]
+getFollowedsById user = getFollows >>= (\follows -> (lift . return) $ filter (\follow -> (follower_id follow) == (uid user)) follows)
+```
+
+LLama a la función `getFollows`, que retorna `ExceptT Error AppHandler [Follow]`.
+
+```haskell
+getFollows :: ExceptT Error AppHandler [Follow]
+getFollows = lift $ with pg $ query_ "SELECT follower_id,followed_id FROM relationships"
+```
+
+Simular a las funciones que realizan la query a la base de datos, la función realiza una query utilizando la Snaplet PostgreSql para obtener los pares *follower_id, followed_id* de la tabla `Relationships`, retornando un array de `Follow` (_record syntax_: `data Follow = Follow {follower_id :: Int, followed_id :: Int}`) como un valor monádico de `AppHandler`, siendo el tipo retornado `AppHandler [Follow]` haciendo un `lift` de dicha mónada a `ExceptT Error AppHandler [Follow]`.
+
+Volviendo a la función `getFollowedsById`, una vez que obtenemos los `follows`, iteramos sobre éstos con `filter`, quedándonos con aquellos cuyo `follower_id` es equivalente al `uid` del `user`. Luego con el `return` se pone en contexto al nuevo array de `Follow` con `AppHandler [Follow]`, y por último, se hace un `lift` de dicha mónada a `ExceptT Error AppHandler [Follow]`.
+
+Otra vez, volviendo a la función `getFollowedPostsByUserId` y ya teniendo dichos `follows`, se hace un `map` de los mismos llamando a la función `getPostByUserId`, la cual recibe un `Int` t retorna `ExceptT Error AppHandler [Post]`.
+
+```haskell
+getPostByUserId :: Int -> ExceptT Error AppHandler [Post]
+getPostByUserId userId = do
+  posts <- getPosts
+  lift $ return $ filter (\post -> userId == user_id post) posts
+```
+
+La misma llama a `getPosts` (ya explicada) que retorna todos los posts de la base de datos. Luego mediante la función `filter` se queda con los posts cuyo `user_id` coincida con el `userId` enviado como argumento a la función. Por útlimo a dicho array se lo pone en contexto con `AppHandler` mediante el `return`, y se le hace un `lift` para llevarlo a `ExceptT Error AppHandler [Post]`.
+
+Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos valores obtenemos un array de `ExceptT Error AppHandler [Post]`, siendo con la función `concatListAppHandlerList` la que nos lo convierte a `ExceptT Error AppHandler [Post]`, siendo lo que finalmente retorna la función, para luego así seguir con el flujo de handlers.
+
 ___
 ### Inicialización del servidor
 
