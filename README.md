@@ -39,6 +39,16 @@ El archivo *pg_haskitter.sql* detalla el esquema de la base de datos. A continua
 - It has an INDEX en la columna `followed_id`.
 - Tiene un UNIQUE INDEX entre las columnas `follower_id` y `followed_id`.
 
+### Modelos en código
+
+A su vez, dichas tablas se mapean con tres tipos de datos de Haskell, `Users`, `Posts` y `Follow`, definidos a continuación en _record syntax_:
+
+```haskell
+data User = User { uid :: Int, email :: String, name :: String, password :: String }
+data Post = Post { message :: String , user_id :: Int }
+data Follow = Follow { follower_id :: Int, followed_id :: Int }
+```
+
 # Snap
 
 `Snap` es un framework de desarrollo web escrito en Haskell.
@@ -72,8 +82,117 @@ Cada `Snaplet` tiene su dierctorio de donde leer la configuración y almacenar a
 
 # Conceptos claves
 
-Antes de comenzar con el análisis del proyecto vamos a
+Antes de comenzar con el análisis del proyecto vamos a desarrollar ciertos conceptos aplicados a lo largo del trabajo.
 
+### Functors
+
+Es un _Typeclass_ que permite al constructor que lo instancia definir una función sobre como mapearse a si mismo. Define la funcion:
+
+```haskell
+    class Functor f where  
+        fmap :: (a -> b) -> f a -> f b
+```
+
+`f` tiene que ser un constructor que recibe un solo parámetro (constructor no concreto).
+
+Además, un **functor** se puede aplicar a una función.
+
+```haskell
+    instance Functor ((->) r) where  
+        fmap f g = (\x -> f (g x))
+```
+
+Otra forma de escribirlo sería
+
+```haskell
+    instance Functor ((->) r) where  
+        fmap = (.)
+```
+
+Esto significa que mapear una funcion sobre otra devuelve una funcion. Y este mapeo es la composicion de aquellas funciones.
+
+### Applicative functors
+
+Es un _Typeclass_ que básicamente permite aplicar **functors** a **functors**. Con **functors** podiamos aplicar funciones a **functors**, pero no podíamos aplicar **functors** a **functors**. Esto es lo que resuelve **Applicative Functors**.
+
+```haskell
+    class (Functor f) => Applicative f where  
+        pure :: a -> f a  
+        (<*>) :: f (a -> b) -> f a -> f b
+```
+
+La función pure lo que hace es tomar un valor `a` y ponerlo en el contexto del **functor** `f` que recibe. Podemos ver que `pure f <*> x` es igual a `fmap f x` por lo siguiente: `pure f` pone en contexto a `f` con el constructor de `x`, luego, por la definición de la función queda `fmap f x`.
+
+Entonces nos queda una función infija definida de la siguiente manera:
+
+```haskell
+    (<$>) :: (Functor f) => (a -> b) -> f a -> f b  
+    f <$> x = fmap f x
+```
+
+Un ejemplo es el siguiente:
+
+```haskell
+instance FromRow User where
+  fromRow = User <$> field <*> field <*> field <*> field
+```
+
+Lo que hace es lo siguiente:
+
+```haskell
+    User <$> field
+```
+
+`User` es una función:
+
+```haskell
+    User { uid :: Int, email :: String, name :: String, password :: String }
+    User:: Int -> String -> String -> String -> User
+```
+
+y se aplica `fmap User field`. `field` contiene el primer valor de `uid` en un contexto, entonces se aplica `User` a `uid` y se wrappea en un contexto.
+
+```haskell
+    User <$> field <*> field
+    Contexto (User uid) <*> Contexto (email)
+```
+
+Aca tenemos un **Applicative functor**, y lo que se realiza es `fmap (User uid) (Contexto email)` y retornara `Contexto (User uid email)`.
+
+Entonces se aplica la funcion `User uid` a `email` y se la wrapea en el contexto. Quedando `Contexto (User uid)`.
+
+### Monad
+
+Toda **Monad** es un **Applicative Functor**, a pesar de que la clase Monad no lo declare.
+
+```haskell
+    class Monad m where  
+        return :: a -> m a  
+
+        (>>=) :: m a -> (a -> m b) -> m b  
+
+        (>>) :: m a -> m b -> m b  
+        x >> y = x >>= \_ -> y  
+
+        fail :: String -> m a  
+        fail msg = error msg
+```
+
+`return`: Toma algo y lo wrapea en una mónada. Es equivalente a `pure` de **Applicative Functors**. Para `Maybe` toma un valor y lo wrappea en un `Just`. (No confundir `return` con el `return` de otros lenguajes, solamente toma un valor y lo pone dentro de un contexto).
+`>>=` (bind): Toma una mónada (un valor dentro de un contexto) y se lo entrega a una función que recibe un valor monádico, pero que retorna una mónada.
+`fail`: Es utilizado por Haskell para tratar los errores con las mónadas.
+
+### Monad Transformers
+
+Es un _Type Constructor_ que recibe como argumento una mónada y devuelve otra mónada.
+
+Un ejemplo de uso sería el manejo de errores con la mónada `IO`, el cual requeriría del uso de la monada `Either`. El manejo de dichos errores involucraría la combinación de ambas mónadas, haciendo que el código sea menos legible. Para abstraerse de esta combinación se puede crear una mónada que combine estas dos mónadas y nos abstraiga de dicha combinación, lo que se lo llama **Monad Transformer**.
+
+Se denomina la operación `lift` cuando se va de una mónada a una superior que la engloba.
+
+La convención indica que también existe un método `run` que nos permite volver a la mónada original (de la superior que la engloba a la original).
+
+_______________________________________
 # Análisis del proyecto
 
 Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers.
