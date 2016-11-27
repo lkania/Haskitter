@@ -720,13 +720,55 @@ Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos v
 
 #### DELETE /user/:id
 
-Éste endpoint se
+Éste endpoint elimina la cuenta del user con dicho `:id`.
 
 ```haskell
 "/user/:id", method DELETE $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ deleteHandler
 ```
 
+Se comienza llamando  a la función `deleteHandler`, la cual recibe como argumento el tipo `User` y retorna un valor de tipo `ExceptT Error AppHandler User`.
 
+```haskell
+deleteHandler :: User -> ExceptT Error AppHandler User
+deleteHandler user = do
+  user_id <- nullCheck NullId (lift . return) "user_id"
+  if (byteStringToString user_id) /= (show $ uid user) then throwE InvalidDelete else delete user
+```
+
+Vemos que la función está escrita en _do notation_, por lo que también se puede escribir de la siguiente forma:
+
+```haskell
+deleteHandler :: User -> ExceptT Error AppHandler User
+deleteHandler user = (nullCheck NullId (lift . return) "user_id") >>= (\user_id -> if (byteStringToString user_id) /= (show $ uid user) then throwE InvalidDelete else delete user)
+```
+
+Primero se llama a la función `nullCheck` la cual recibe como argumento un `Error`, una función que recibe un `BS.ByteString` y retorna `ExceptT Error AppHandler BS.ByteString`, un `BS.ByteString` y retorna `ExceptT Error AppHandler BS.ByteString`. Como error se le pasa `NullId`, luego la función `(lift . return)`, y como último argumento el `BS.ByteString` `"user_id"`.
+
+```haskell
+nullCheck :: Error -> (BS.ByteString -> ExceptT Error AppHandler BS.ByteString) -> BS.ByteString -> ExceptT Error AppHandler BS.ByteString
+nullCheck error f object_id = do
+  maybe_object <- lift $ getParam object_id
+  maybe (throwE error) f maybe_object
+```
+
+`getParam object_id` lo que hace es conseguir el _query param_ con el nombre especificado en el tercer argumento, en éste caso *user_id*, retornando `AppHandler (Maybe ByteString)`, para luego hacer un `lift` de a `Except Error AppHandler (Maybe ByteString)`. Por medio del binding se le pasa el valor monádico a la función `maybe (throwE error) f maybe_object`. Ésta función hace que en caso de que el valor `maybe_object` sea `Nothing` retorna el error `NullId`, pero si `maybe_object` es `Just ByteString` entonces se lo pasa como argumento a la función `f`.
+
+En la función `deleteHandler`, a `nullCheck` se le pasa como función `f` `(lift . return)`, que lo que hace es al `BS.ByteString` lo pone en contexto con `AppHandler` para luego hacerle un `lift`, quedando `ExceptT Error AppHandler BS.ByteString`. Éste valor monádico vendría a ser el `id` del usuario que se quiere eliminar, pasándolo como argumento a la función `(\user_id -> if (byteStringToString user_id) /= (show $ uid user) then throwE InvalidDelete else delete user)`.
+
+Lo que hace es preguntar si el `user_id` es el mismo al usuario actual, y en caso de serlo se llama la función `delete` con dicho usuario. La misma recibe `User` y retorna `ExceptT Error AppHandler User`.
+
+```haskell
+delete :: User -> ExceptT Error AppHandler User
+delete user = do
+  lift $ with pg $ execute "DELETE FROM users where id = ?" (uid user)
+  lift . return $ user
+```
+
+Utiliza la _snaplet_ PostgreSql para realizar la query en base de datos para eliminar el usuario que se le pasó como argumento a la función. Luego, al `user` se lo pone en contexto con `AppHandler` y por último se le hace un `lift` para así retornar `ExceptT Error AppHandler User`.
+
+En caso de que en la función `deleteHandler` el `user_id` no sea el mismo al `id` del usuario actual se procede a llamar a la función `throwE` con el error `InvalidDelete`, retornando `ExceptT Error AppHandler User`.
+
+Luego sigue el flujo de handlers con `loginHandler`, que ya fue desarrollado.
 
 ___
 ### Inicialización del servidor
