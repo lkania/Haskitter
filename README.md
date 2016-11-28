@@ -770,6 +770,85 @@ En caso de que en la función `deleteHandler` el `user_id` no sea el mismo al `i
 
 Luego sigue el flujo de handlers con `loginHandler`, que ya fue desarrollado.
 
+#### POST /signup
+
+Éste endpoint crea un usuario recibiendo los siguientes parámetros:
+
+```json
+{
+    user_email: string,
+    user_name: string,
+    user_password: string,
+    user_password_confirmation: string
+}
+```
+
+```haskell
+"/signup", method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ signUpHandler
+```
+
+Se comienza llamando a la función `signUpHandler`, la cual retorna `ExceptT Error AppHandler User`.
+
+```haskell
+signUpHandler :: ExceptT Error AppHandler User
+signUpHandler = do
+  user_email <- nullCheck NullEmail (lift . return) "user_email"
+  user_name <- nullCheck NullName (lift . return) "user_name"
+  user_password <- nullCheck NullPassword (lift . return) "user_password"
+  user_password_confirmation <- nullCheck NullPasswordConfirmation (lift . return) "user_password_confirmation"
+  if user_password /= user_password_confirmation
+    then throwE PasswordConfirmationMissmatch
+    else (do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
+```
+
+Lo primero que se hace es llamar a la función `nullCheck` (ya explicada en el endpoint de `DELETE /user/:id`) con el error `NullEmail` buscando el parámetro *user_email*, guardando el valor monádico en `user_email`. Se hace lo mismo con el parámetro *user_name*, *user_password* y *user_password_confirmation*, cada uno con sus respectivos errores (`NullName`, `NullPassword`, y `NullPasswordConfirmation` respectivamente).
+
+Luego, valida si el valor ingresado en `user_password` coincide con `user_password_confirmation`. En caso de no coincidir se llama a la función `throwE` con el error `PasswordConfirmationMissmatch`, mientras que si dichas contraseñas conciden se procede a llamar a la siguiente función:
+
+```haskell
+(do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
+```
+
+Se hace uso de la función `catchE` llamada de forma infija (explicada previamente). De la izquierda (`do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken`) se fija si el email del usuario nuevo a crear ya existe, y en caso de que exista se llama a la función `throwE` con el error `EmailAlreadyTaken`. Dicha parte retorna `ExceptT Error AppHandler User`. De la derecha (`(signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))`) llama a la función `signUpNoSuchUserHandler`, la cual recibe como parámetro tres `String`, un `Error` y finalmente retorna `ExceptT Error AppHandler User`.
+
+```haskell
+signUpNoSuchUserHandler :: String -> String -> String -> Error -> ExceptT Error AppHandler User
+signUpNoSuchUserHandler user_email user_name user_password err = -- do
+  case err of
+    NoSuchUser -> signUp user_email user_name user_password
+    _ -> throwE err
+```
+
+`signUpNoSuchUserHandler` lo que hace es utilizar un `case` para que en caso de que el error recibido como argumento sea `NoSuchUser` entonces crear el usuario mediante la función `signUp`, que recibe como argumento los tres `String` recibidos por parámetro de la función `signUpNoSuchUser` y retorna `ExceptT Error AppHandler User`.
+
+```haskell
+signUp :: String -> String -> String -> ExceptT Error AppHandler User
+signUp user_email user_name user_password = do
+  lift $ with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)
+  getUserByEmail user_email
+```
+
+La función está escrita con _do notation_, por lo que también se puede escribir de la siguiente manera:
+
+```haskell
+signUp :: String -> String -> String -> ExceptT Error AppHandler User
+signUp user_email user_name user_password = (lift $ with pg $ execute "INSERT INTO users (email,name,password) VALUES (?,?,?)" (user_email,user_name,user_password)) >>= (\a -> getUserByEmail user_email)
+```
+
+Mediante la *snaplet* de PostgreSql se crea al usuario, y finalmente hace una llamada a la función `gettUserByEmail` con el email del usuario recién creado, retornando `ExceptT Error AppHandler User`.
+
+Volviendo a la función `signUpNoSuchUserHandler`, en caso de que el error pasado como argumento no sea `NoSuchUser`, entonces se encarga de llamar a la función `throwE` con el error que le llega como parámetro, retornando `Except Error AppHandler User`.
+
+Como podemos ver en la función
+
+```haskell
+(do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
+```
+
+El valor de la derecha de `catchE` tiene el tipo `Error -> (Except Error AppHandler User)` ya que a la función `signUpNoSuchUserHandler` no se le pasa como argumento el `Error`, y de ésto se encarga la función `catchE`.
+
+Luego sigue el flujo de handlers con `catchHandler`, el cual ya fue desarrollado.
+
 ___
 ### Inicialización del servidor
 
