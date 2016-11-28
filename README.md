@@ -718,6 +718,39 @@ La misma llama a `getPosts` (ya explicada) que retorna todos los posts de la bas
 
 Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos valores obtenemos un array de `ExceptT Error AppHandler [Post]`, siendo con la función `concatListAppHandlerList` la que nos lo convierte a `ExceptT Error AppHandler [Post]`, siendo lo que finalmente retorna la función, para luego así seguir con el flujo de handlers.
 
+#### POST /post
+
+___
+
+`loginHandler` recibe como argumento una función que recibe un `User` y retorna `ExceptT Error AppHandler a`, y devuelve `ExceptT Error AppHandler a`.
+
+```haskell
+loginHandler :: (User -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
+loginHandler handler = do
+  user_email <- nullCheck NullEmail (lift . return) "user_email"
+  user_password <- nullCheck NullPassword (lift . return) "user_password"
+  user <- getUserByEmail $ (byteStringToString user_email)
+  user <- checkPassword user (byteStringToString user_password)
+  handler user
+```
+
+La función está escrita en _do notation_, por lo que también se la puede escribir de la siguiente manera:
+
+```haskell
+loginHandler :: (User -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
+loginHandler handler = (nullCheck NullEmail (lift . return) "user_email") >>= ((\user_email) -> (nullCheck NullPassword (lift . return) "user_password") >>= ((\user -> getUserByEmail $ (byteStringToString user_email) >>= (\user -> (checkPassword user (byteStringToString user_password) >>= handler user)))))
+```
+
+Lo que hace es mediante la función `nullCheck` validar la presencia de los parámetros *user_email* y *user_password*, pasando el valor monádico de cada uno como `user_email` y `user_password` respectivamente. Luego mediante la función `getUserByEmail` se consigue el usuario, retornando `ExceptT Error AppHandler User`, y pasando el valor monádico en `user` a la función `checkPassword user (byteStringToString user_password)`, la cual mediante la función `checkPassword` verifica que la contraseña ingresada sea la misma que la contraseña del usuario, y en caso de no serlo llama a la función `throwE` con el error `InvalidPassword`.
+
+```haskell
+checkPassword :: User -> String -> ExceptT Error AppHandler User
+checkPassword user user_password = do
+  if password user == user_password then lift . return $ user else throwE InvalidPassword
+```
+
+Por último se llama a `handler user`, el cual sigue con el flujo de _handlers_.
+
 #### DELETE /user/:id
 
 Éste endpoint elimina la cuenta del user con dicho `:id`.
