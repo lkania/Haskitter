@@ -1,3 +1,5 @@
+[TOC]
+
 # Introducción
 
 El objetivo del trabajo práctico fue el de desarrollar una _Web API_ aplicando los conceptos aprendidos a lo largo de la materia.
@@ -720,7 +722,47 @@ Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos v
 
 #### POST /post
 
+Este endpoint le permite a un usuario enviar un mensaje en el sistema, para ser visto por el resto de los usuarios.
+
+```haskell
+"/post" ,  method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ postHandler   
+```
 ___
+
+`postHandler` es una función que recibe un `User` por parametro y retorna `ExceptT Error AppHandler Post`, es decir que retornara el posteo que se realizó o un error si lo hubiera.
+
+```haskell
+postHandler :: User -> ExceptT Error AppHandler Post
+postHandler user = do
+  user_message <- nullCheck NullMessage (lift . return) "user_message"
+  createPost (byteStringToString user_message) user
+```
+
+`postHandler` puede ser rescrito cómo la siguiente función
+
+```haskell
+postHandler user = nullCheck NullMessage (lift . return) "user_message" >>= (user_message -> createPost (byteStringToString user_message) user)
+```
+
+`nullCheck NullMessage (lift . return) "user_message"` chequeara si el parametro "user_message" ha sido enviado entre los parametros del `POST` y retorna `ExceptT Error AppHandler BS.ByteString`. En caso de que el usuario no haya envíado el parametro habremos lanzado el `Error` `NullMessage`, si se envío tendremos un `AppHandler BS.ByteString` con el mensaje que el usuario quiere enviar. Luego el valor monádico es pasado por parametro a la función ` createPost (byteStringToString user_message) user`. La función transforma el parametro `user_message` de `BS.ByteString` a `String` mediante la función `byteStringToString` y ejecuta la función `createPost` con el mensaje que usuario desea publicar y el `User` en cuestión.
+
+```haskell
+createPost :: String -> User -> ExceptT Error AppHandler Post
+createPost message user = do
+  lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)
+  lift. return $ Post message (uid user)
+```
+
+Esta función puede ser rescrita de la siguiente manera sin _do notation_
+
+```haskell
+createPost :: String -> User -> ExceptT Error AppHandler Post
+createPost message user = do
+  (lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)) >> (lift. return $ Post message (uid user))
+```
+La función `lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)` ejecuta la unción `execute` pasando como primer parametro un `String` query y como segundo una tupla con los valores a insertar en la query. Esta función se ejecuta en el contexto de la `Snaplet` pg gracias a la función with, y retorna por resultado `AppHandler Post` que es lifteado a `ExceptT Error AppHandler Post`. Luego mediante el operador `>>` se ejecuta la función `(lift. return $ Post message (uid user)`, que crea un valor de tipo `Post` mediante la función `Post` y los parametros `message` y el id del `User` (obtenido mediante `uid user`). Al valor `Post` se le agrega un contexto mediante la función `lift . return` por lo que el tipo retornado es `ExceptT Error AppHandler Post`.
+
+Todo esto sucede dentro dentro `postHandler` que es pasado como parametro a la función `loginHandler`.
 
 `loginHandler` recibe como argumento una función que recibe un `User` y retorna `ExceptT Error AppHandler a`, y devuelve `ExceptT Error AppHandler a`.
 
@@ -751,9 +793,62 @@ checkPassword user user_password = do
 
 Por último se llama a `handler user`, el cual sigue con el flujo de _handlers_.
 
+#### POST /follow
+
+Este endpoint le permite a un usuario A seguir a un usuario B, y por lo tanto le permite al usuario A ver los mensajes que publica el usuario B en su feed.
+
+```haskell
+"/follow" , method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ followHandler  
+```
+
+`followHandler` es una función que recibe como parametro un `User`, el usuario A en el ejemplo anterior, y retorna un `ExceptT Error AppHandler Follow` con el valor `Follow` en caso de que se haya logrado la acción o un valor `Error` en caso de que hubiera habído un fallo.
+
+```haskell
+followHandler :: User -> ExceptT Error AppHandler Follow
+followHandler follower = do
+  followed_id <- nullCheck NullFollowerId (lift . return) "followed_id"
+  followed <- getUserById $ (byteStringToString followed_id)
+  if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed
+```
+
+`followHandler` puede ser reescrito de la siguiente manera sin la utilización de la _do notation_.
+
+```haskell
+followHandler follower =
+  (nullCheck NullFollowerId (lift . return) "followed_id") >>=
+  (followed_id -> getUserById $ (byteStringToString followed_id)) >>=
+  (followed -> if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed)    
+```
+
+La función `nullCheck NullFollowerId (lift . return) "followed_id"` chequea si el parametro "followed_id" ha sido enviado entre los parametros del `POST` y retorna `ExceptT Error AppHandler BS.ByteString`. En caso de que el usuario no haya envíado el parametro habremos lanzado el `Error` `NullFollowerId`, si se envío tendremos un `AppHandler BS.ByteString` con el id del `User` ha seguir.
+
+Luego el valor monádico es pasado por parametro a la función `followed_id -> getUserById $ (byteStringToString followed_id)`. La función transforma el parametro `followed_id` de `BS.ByteString` a `String` mediante la función `byteStringToString` y este valos es recibido por parametro por la función `getUserById`, que como se explico anteriormente retorna un valor de tipo `ExceptT Error AppHandler User` con el `User` ha seguir en cuestion o un `Error`.
+
+Luego el valor monádico es pasado por parametro a la función `followed -> if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed`, la cual verifica que el `User` no se este intentando seguir a si mismo y en cuyo canzo lanza un `Error` `InvalidFollow`. Si el `User` trata de seguir a otro usuario distinto de el se ejecutara a función `subscribe` con ambos usarios como parametros.
+
+```haskell
+subscribe :: User -> User -> ExceptT Error AppHandler Follow
+subscribe follower followed = do
+  lift $ with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)
+  lift . return $ Follow (uid follower) (uid followed)
+```
+
+La cual puede ser reescrita cómo:
+
+```haskell
+subscribe follower followed = do
+  (lift $ with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)) >>
+  (lift . return $ Follow (uid follower) (uid followed))
+```
+
+La función `lift $ with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)` ejecuta la función `execute` pasando como primer parametro un `String` query y como segundo una tupla con los valores a insertar en la query, en este caso los id de ambos usuarios. Esta función se ejecuta en el contexto de la `Snaplet` `pg` gracias a la función with, y retorna por resultado `AppHandler Follow` que es lifteado a `ExceptT Error AppHandler Follow`. Luego mediante el operador `>>` se ejecuta la función `(lift . return $ Follow (uid follower) (uid followed)`, que crea un valor de tipo `Follow` mediante la función `Follow` y los id de los usuario implicados obtenidos a partir de los parametros `User` que se le pasaron a `subscribe`. Al valor `Follow` se le agrega un contexto mediante la función `lift . return` por lo que el tipo retornado es `ExceptT Error AppHandler Follow`.
+
+Todo esto sucede dentro dentro `followHandler` que es pasado como parametro a la función `loginHandler`, la cual ya fue explicada anteriormente.
+
+
 #### DELETE /user/:id
 
-Éste endpoint elimina la cuenta del user con dicho `:id`.
+Este endpoint elimina la cuenta del user con dicho `:id`.
 
 ```haskell
 "/user/:id", method DELETE $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ deleteHandler
@@ -771,7 +866,6 @@ deleteHandler user = do
 Vemos que la función está escrita en _do notation_, por lo que también se puede escribir de la siguiente forma:
 
 ```haskell
-deleteHandler :: User -> ExceptT Error AppHandler User
 deleteHandler user = (nullCheck NullId (lift . return) "user_id") >>= (\user_id -> if (byteStringToString user_id) /= (show $ uid user) then throwE InvalidDelete else delete user)
 ```
 
