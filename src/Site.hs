@@ -3,7 +3,7 @@
 -- site. The 'haskitterInit' function is the initializer that combines everything
 -- together and is exported by this module.
 module Site
-  ( hashkitterInit
+  ( haskitterInit
   ) where
 
 ------------------------------------------------------------------------------
@@ -41,8 +41,8 @@ routes = [
 
 ------------------------------------------------------------------------------
 -- | Build a new Haskitter snaplet.
-hashkitterInit :: SnapletInit Haskitter Haskitter
-hashkitterInit = makeSnaplet "hashkitterInit" "A simple twitter written in Haskell" Nothing $ do
+haskitterInit :: SnapletInit Haskitter Haskitter
+haskitterInit = makeSnaplet "hashkitterInit" "A simple twitter written in Haskell" Nothing $ do
   p <- nestSnaplet "pg" pg pgsInit
   addRoutes routes
   return $ Haskitter { _pg = p}

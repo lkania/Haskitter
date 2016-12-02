@@ -7,7 +7,5 @@ import Site
 
 main :: IO ()
 main = do
-  (_, site, _) <- runSnaplet Nothing hashkitterInit -- Initialize a Memoise snaplet
+  (_, site, _) <- runSnaplet Nothing haskitterInit
   quickHttpServe site -- Start the Snap server
-
-
