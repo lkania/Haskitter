@@ -1114,6 +1114,78 @@ type AppHandler = Handler Haskitter Haskitter
 Por último quisieramos aclarar que el tipo `AppHanlder` comentado durante el desarrollo, es solamente un alias de `Handler Haskitter Haskitter`, es decir, un web `Handler` que recibe una `Snaplet` `Haskitter` y retorna una `Snaplet` `Haskitter`.
 
 
+### Manejo de errores
+
+Los errores no siempre se manejaron mediante la monada `ExceptT`. Originalmente toda la aplicación se había realizado utilizando funciones que retornaba valores del tipo `AppHandler Maybe a`. Por ejemplo, analicemos la implementación anterior de `loginHandler`.
+
+```haskell
+loginHandler :: (User -> AppHandler ()) -> AppHandler ()
+loginHandler handler = do
+  user_email    <- getParam "user_email"
+  user_password <- getParam "user_password"
+  maybe_user    <- checkParam user_email    "No email"    (return Nothing) (\u_email ->
+                   checkParam user_password "No password" (return Nothing) (\u_password ->
+                   loginHandler' u_email u_password ))
+  case maybe_user of
+    Nothing -> return ()
+    Just user -> handler user
+```
+
+Al principio obtenemos los parámetros "user_email" y "user_password" del HTTP Request. Y luego verificamos mediante la función `checkParam` que los parametros no sean `Nothing` sino `Just BS.ByteString`.
+
+```haskell
+checkParam :: Maybe b -> BS.ByteString -> AppHandler a -> (b -> AppHandler a) -> AppHandler a
+checkParam param error_message return_value handler = maybe (do writeBS error_message; return_value) handler param
+```
+
+Podemos ver por la función `checkParam` que un error implica escribir en la HTTP Reply el error que se había generado y luego retornar `Nothing` de manera que la funcioón `loginHandler` pueda continuar su flujo normal.
+
+En caso de que ambos parámetros se hubieran enviado correctamente se pocedía a ejecutar la función `loginHandler`.  
+
+```haskell
+loginHandler' :: BS.ByteString -> BS.ByteString -> AppHandler (Maybe User)
+loginHandler' user_email user_password = do
+  maybe_user <- login (byteStringToString user_email) (byteStringToString user_password)
+  ifNothingWrite maybe_user "Incorrect login"
+  return maybe_user
+```
+
+La función `login` retornaba un valor `AppHandler Maybe User`, ya que había que verificar si el valor retornado era `Nothing` y en ese caso escribir en la HTTP Reply el error mediante la función `ifNothingWrite`.
+
+```haskell
+ifNothingWrite :: Maybe a -> BS.ByteString -> AppHandler ()
+ifNothingWrite maybe_var message = do
+  case maybe_var of
+    Nothing -> writeBS message
+    Just var -> return ()
+```
+
+Este patron se repetía por todas las funciones de la aplicación. La razón fundamental de porqué esto sucedia era porque estabamos usando la monada `AppHandler` que en el contexto de `Snap` es usada para operaciones I/O como nuestro método de manejo de errores.
+
+La monada `Either` en cambio es una gran manejadora de errores, pues puede contener dos valores monádicos de significado independiente, una rama contiene el resultado mientras que la otra los errores. Una vez que se comprendio el error cometido al diseñar la aplicación se procedio a utilozar la monada `ExceptT` que internamente utiliza la monada `Either` para el manejo de resultados de operaciones I/O y errores.    
+
+Vemos por ejemplo que se pudo reescribir la función `loginHandler` de la siguiente manera.
+
+```haskell
+loginHandler :: (User -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
+loginHandler handler = do
+  user_email <- nullCheck NullEmail (lift . return) "user_email"
+  user_password <- nullCheck NullPassword (lift . return) "user_password"
+  user <- getUserByEmail $ (byteStringToString user_email)
+  user <- checkPassword user (byteStringToString user_password)
+  handler user
+```
+
+Este endpoint ya ha sido explicado anteriormente, pero lo que cabe destacar entre la versión actual y la anterior (sin utilizar `ÈxceptT`) es que gracias a `ExceptT` el código se puede escribir en función al flujo normal de ejecución sin errores y en caso de que haya un error será tratado como un valor normal que puede retornar la función y no cómo una excepción que interrumpe el flujo normal de ejecución, que si pasa en lenguaje como Java.  
+
+Se puede acceder a [este](https://github.com/lkania/Haskitter/tree/2a4664c0e82e77d4199dcc5b32f9ee4e2dc185b8/src) link en caso de querer leer el código antes de que fuera reescrito en su totalidad para utilizar el nuevo sistema de manejo de errores.
+
+### Conclusión
+
+Luego de un año de trabajo con el framework Snap, podemos decir que el mismo tiene ciertas desventajas las cuales sufrimos a lo largo del desarrollo, como por ejemplo la falta de mantenimiento por parte de los creadores y su falta de documentación. Sin embargo, de los frameworks para desarrollo web basados en Haskell (existen otros como Yesod y Happstack) es el que más permite utilizar Haskell puro y sin muchos tipos pertenecientes al framework. Esta cualidad es la que nos permitió ganar un gran entendimiento de `Functors`, `Applicative functors`, `Monad` y `Monad Transformers`. Sobre todo los últimos dos conceptos se ven muy bien reflejados en el desarrollo web debido a todos los cambios de contexto que suceden entre la base de datos, las funciones puras y el procesamiento de las HTTP Request y Response.
+
+Por último consideramos al manejo de errores que no interrumpe la ejecución normal de la aplicación como uno de los grandes aprendizajes del proyecto, y del poder del paradigma funcional. 
+
 ### Bibliografía
 
 * [Snap Package - Hackage](https://hackage.haskell.org/package/snap-core-1.0.0.0/docs/Snap-Core.html)
@@ -1121,3 +1193,4 @@ Por último quisieramos aclarar que el tipo `AppHanlder` comentado durante el de
 * [Lenses, Folds, and Traversals - Edward Kmett](https://www.youtube.com/watch?v=cefnmjtAolY&feature=youtu.be&hd=1)
 * [A Little Lens Starter Tutorial - School of Haskell](https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/a-little-lens-starter-tutorial)
 * [Difference between makeLenses and makeFields](http://stackoverflow.com/questions/25585650/whats-the-difference-between-makelenses-and-makefields)
+* [A Gentle Introduction to Monad Transformers](https://github.com/kqr/gists/blob/master/articles/gentle-introduction-monad-transformers.md)
