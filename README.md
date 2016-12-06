@@ -1,13 +1,13 @@
 # Programación Funcional
----
-## Trabajo Práctico Final -- 12/2016
----
-## Haskitter: Twitter Web API
----
+
+## Trabajo Práctico Final - 12/2016
+
+## Haskitter: Functional Twitter Web API
+
 ## Alumnos
-- #### Kania, Lucas (54257)
-- #### Prudhomme, Franco (54263)
----
+#### Kania, Lucas (54257)
+#### Prudhomme, Franco (54263)
+
 ### Contenido
 
 - [Introducción](#)
@@ -1757,7 +1757,7 @@ Se puede acceder a [este](https://github.com/lkania/Haskitter/tree/2a4664c0e82e7
 
 Luego de un año de trabajo con el framework Snap, podemos decir que el mismo tiene ciertas desventajas las cuales sufrimos a lo largo del desarrollo, como por ejemplo la falta de mantenimiento por parte de los creadores y su falta de documentación. Sin embargo, de los frameworks para desarrollo web basados en Haskell (existen otros como Yesod y Happstack) es el que más permite utilizar Haskell puro y sin muchos tipos pertenecientes al framework. Esta cualidad es la que nos permitió ganar un gran entendimiento de `Functors`, `Applicative functors`, `Monad` y `Monad Transformers`. Sobre todo los últimos dos conceptos se ven muy bien reflejados en el desarrollo web debido a todos los cambios de contexto que suceden entre la base de datos, las funciones puras y el procesamiento de las HTTP Request y Response.
 
-Por último consideramos al manejo de errores que no interrumpe la ejecución normal de la aplicación como uno de los grandes aprendizajes del proyecto, y del poder del paradigma funcional. 
+Por último consideramos al manejo de errores que no interrumpe la ejecución normal de la aplicación como uno de los grandes aprendizajes del proyecto, y del poder del paradigma funcional.
 
 ### Bibliografía
 
