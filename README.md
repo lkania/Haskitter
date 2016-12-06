@@ -2,29 +2,30 @@
 
 - [Introducción](#)
 - [Esquema de la base de datos y modelos](#)
-		- [Users](#)
-		- [Posts](#)
-		- [Relationships](#)
-		- [Modelos en código](#)
+    - [Users](#)
+	- [Posts](#)
+	- [Relationships](#)
+	- [Modelos en código](#)
 - [Snap](#)
 - [Conceptos claves](#)
-		- [Functors](#)
-		- [Applicative functors](#)
-		- [Monad](#)
-		- [Monad Transformers](#)
+	- [Functors](#)
+	- [Applicative functors](#)
+	- [Monad](#)
+	- [Monad Transformers](#)
+- [Uso de la API](#)
 - [Análisis del proyecto](#)
-			- [GET /posts](#)
-			- [GET/postsWithUser](#)
-			- [GET /users](#)
-			- [GET /user/:id](#)
-			- [GET feed/:id](#)
-			- [POST /post](#)
-			- [POST /follow](#)
-			- [DELETE /user/:id](#)
-			- [POST /signup](#)
-		- [Inicialización del servidor](#)
-		- [Estado de la Snaplet](#)
-		- [Bibliografía](#)
+	- [GET /posts](#)
+	- [GET/postsWithUser](#)
+	- [GET /users](#)
+	- [GET /user/:id](#)
+	- [GET feed/:id](#)
+	- [POST /post](#)
+	- [POST /follow](#)
+	- [DELETE /user/:id](#)
+	- [POST /signup](#)
+- [Inicialización del servidor](#)
+- [Estado de la Snaplet](#)
+- [Bibliografía](#)
 
 # Introducción
 
@@ -221,9 +222,7 @@ Se denomina la operación `lift` cuando se va de una mónada a una superior que 
 La convención indica que también existe un método `run` que nos permite volver a la mónada original (de la superior que la engloba a la original).
 
 _______________________________________
-# Análisis del proyecto
-
-Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers.
+# Uso de la API
 
 Éstas son todas las rutas que tiene la API:
 
@@ -237,11 +236,599 @@ Cada ruta llama a su correspondiente handler, el cual está compuesto por una co
     POST /signup
     DELETE /user/:id
 
-A continuación vamos a detallar el flujo desde que llega una _http request_ hasta que se retorna la _http respsonse_ para cada endpoint.
+A continuación se detalla la documentación con ejemplos para cada _endpoint_.
 
-#### GET /posts
+### GET /posts
 
 Éste endpoint retorna todos los posts de la base de datos.
+
+#### Request
+##### Headers
+```http
+GET /posts HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+[
+    {
+        "user": 48,
+        "message": "massa rutrum magna. Cras convallis convallis dolor. Quisque"
+    },
+    {
+        "user": 53,
+        "message": "magna. Suspendisse"
+    },
+    ...
+]
+```
+
+### GET /postsWithUser
+
+Éste endpoint retorna todos los posts de la base de datos con el usuario que los creó asociado.
+
+#### Request
+##### Headers
+```http
+GET /postsWithUser HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+[
+    {
+        "post": {
+            "user": 48,
+            "message": "massa rutrum magna. Cras convallis convallis dolor. Quisque"
+        },
+        "user": {
+            "email": "tempor.lorem.eget@nonmagna.net",
+            "name": "Wanda Dillard",
+            "id": 48
+        }
+    },
+    {
+        "post": {
+            "user": 53,
+            "message": "magna. Suspendisse"
+        },
+        "user": {
+            "email": "nunc.nulla.vulputate@Sedpharetrafelis.co.uk",
+            "name": "Celeste Gilbert",
+            "id": 53
+        }
+    },
+    ...
+]
+```
+
+### GET /users
+
+Éste endpoint retorna todos los usuarios de la base de datos.
+
+#### Request
+##### Headers
+```http
+GET /users HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+[
+    {
+        "email": "condimentum.eget@porttitor.edu",
+        "name": "Joelle Long",
+        "id": 1
+    },
+    {
+        "email": "nostra.per@euodio.net",
+        "name": "Leila Savage",
+        "id": 2
+    },
+    ...
+]
+```
+
+### GET /user/:id
+
+Éste endpoint retorna la información del usuario con dicho `:id`
+
+#### Request con id existente
+##### Headers
+```http
+GET /user/1 HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+[
+    {
+        "email": "condimentum.eget@porttitor.edu",
+        "name": "Joelle Long",
+        "id": 1
+    }
+]
+```
+
+#### Request con id no existente
+
+##### Headers
+```http
+GET /user/923 HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+{
+  "error": "User does not exist"
+}
+```
+
+### GET /feed/:id
+
+Éste endpoint retorna todos los posts de los usuarios que el usuario sigue.
+
+#### Request con id existente
+##### Headers
+```http
+GET /feed/1 HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+[
+    {
+        "user": 15,
+        "message": "magna. Ut tincidunt orci quis lectus. Nullam"
+    },
+    {
+        "user": 15,
+        "message": "a purus. Duis elementum,"
+    },
+    {
+        "user": 5,
+        "message": "eleifend egestas. Sed pharetra, felis eget varius ultrices, mauris"
+    },
+    {
+        "user": 5,
+        "message": "sed dolor. Fusce mi lorem, vehicula et, rutrum eu, ultrices"
+    },
+    {
+        "user": 5,
+        "message": "Integer vitae nibh. Donec est mauris, rhoncus id, mollis"
+    }
+]
+```
+
+#### Request con id no existente
+
+##### Headers
+```http
+GET /feed/923 HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+{
+  "error": "User does not exist"
+}
+```
+
+### POST /post
+
+Este endpoint le permite a un usuario enviar un mensaje en el sistema, para ser visto por el resto de los usuarios.
+
+#### Parámetros
+
+    user_message: string
+    user_email: string
+    user_password: string
+
+#### Request con usuario autenticado
+##### Headers
+```http
+POST /post HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+Content-Type: application/x-www-form-urlencoded
+
+user_message=Sed+pharetra%2C+felis+eget+varius+ultrices.&user_email=condimentum.eget%40porttitor.edu&user_password=RGJ99ABN5TE
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+{
+    "user": 1,
+    "message": "Sed pharetra, felis eget varius ultrices."
+}
+```
+
+#### Response cuando las request son inválidas
+
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body cuando la request no tiene *user_password*
+```json
+{
+  "error": "User password is null"
+}
+```
+
+##### Body cuando la request no tiene *user_email*
+```json
+{
+  "error": "User email is null"
+}
+```
+
+##### Body cuando la request no tiene *user_message*
+```json
+{
+  "error": "User message is null"
+}
+```
+
+### POST /follow
+
+Este endpoint le permite a un usuario A seguir a un usuario B, y por lo tanto le permite al usuario A ver los mensajes que publica el usuario B en su feed.
+
+#### Parámetros
+
+    followed_id: string [Usuario al que se quiere seguir]
+    user_email: string
+    user_password: string
+
+#### Request válida
+##### Headers
+```http
+POST /follow HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+Content-Type: application/x-www-form-urlencoded
+
+user_email=juanperez2%40gmail.com&user_password=12&followed_id=2
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+{
+    "follower_id": 104,
+    "followed_id": 2
+}
+```
+
+#### Response cuando las request son inválidas
+
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body cuando la request no tiene *user_password*
+```json
+{
+  "error": "User password is null"
+}
+```
+
+##### Body cuando la request no tiene *user_email*
+```json
+{
+  "error": "User email is null"
+}
+```
+
+##### Body cuando la request no tiene *followed_id*
+```json
+{
+  "error": "Follower id is null"
+}
+```
+
+##### Body cuando la request tiene un *followed_id* que no corresponde a un usuario
+```json
+{
+  "error": "User does not exist"
+}
+```
+
+### POST /signup
+
+Éste endpoint crea un usuario.
+
+#### Parámetros
+
+    user_email: string
+    user_name: string
+    user_password: string
+    user_password_confirmation: string
+
+#### Request válida
+##### Headers
+```http
+POST /signup HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+Content-Type: application/x-www-form-urlencoded
+
+user_email=juanperez%40gmail.com&user_password=123123123&user_password_confirmation=123123123&user_name=Juan+Perez
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+{
+    "email": "juanperez@gmail.com",
+    "name": "Juan Perez",
+    "id": 103
+}
+```
+
+#### Response cuando las request son inválidas
+
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body cuando la request no tiene *user_email*
+```json
+{
+    "error": "User email is null"
+}
+```
+
+##### Body cuando la request no tiene *user_password*
+```json
+{
+    "error": "User password is null"
+}
+```
+
+##### Body cuando la request no tiene *user_password_confirmation*
+```json
+{
+    "error": "User password confirmation is null"
+}
+```
+
+##### Body cuando la request no tiene *user_name
+```json
+{
+    "error": "User name is null"
+}
+```
+
+##### Body cuando la request enviada intenta usar un email que ya existe
+```json
+{
+    "error": "Email already taken"
+}
+```
+
+##### Body cuando en la request enviada no coinciden *password* y *password_confirmation*
+```json
+{
+    "error": "There was a missmatch between user password and user password confirmation"
+}
+```
+
+### DELETE /user/:id
+
+Este endpoint elimina la cuenta del user con dicho `:id`.
+
+### Parámetros
+
+    user_id: string [se valida que sea el mismo que en la url para validar la acción y  que no se borre por error]
+    user_email: string
+    user_password: string
+
+#### Request con usuario autenticado
+##### Headers
+```http
+DELETE /user/1 HTTP/1.1
+Host: ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000
+Content-Type: application/x-www-form-urlencoded
+
+user_email=condimentum.eget%40porttitor.edu&user_password=RGJ99ABN5TE&user_id=1
+```
+
+#### Response
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body
+```json
+{
+    "email": "condimentum.eget@porttitor.edu",
+    "name": "Joelle Long",
+    "id": 1
+}
+```
+
+#### Response cuando las request son inválidas
+
+##### Headers
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Server: Snap/0.9.5.1
+Content-Type: application/json
+Transfer-Encoding: chunked
+```
+
+##### Body cuando la request no tiene *user_id*
+```json
+{
+    "error": "User id is null"
+}
+```
+
+##### Body cuando la request no tiene *user_email*
+```json
+{
+    "error": "User email is null"
+}
+```
+
+##### Body cuando la request no tiene *user_password*
+```json
+{
+    "error": "User password is null"
+}
+```
+
+##### Body cuando el usuario con dicho id no existe
+```json
+{
+    "error": "User does not exist"
+}
+```
+
+# Análisis del proyecto
+
+Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers, detallando el flujo desde que llega una _http request_ hasta que se retorna la _http respsonse_ para cada endpoint.
+
+#### GET /posts
 
 ```haskell
 "/posts" , method GET $ headersHandler $ runHandler $ genericHandler $ postsIndexHandler
@@ -382,8 +969,6 @@ Todo handler está en el array que es retornado por la función constante `route
 
 #### GET/postsWithUser
 
-Éste endpoint retorna todos los posts de la base de datos con el usuario que los creó asociado.
-
 ```haskell
 "/postsWithUser", method GET $ headersHandler $ runHandler $ genericHandler $ postsWitUserIndexHandler
 ```
@@ -457,8 +1042,6 @@ Luego sigue la concatenación de handlers como ya se explicó previamente.
 
 #### GET /users
 
-Éste endpoint retorna todos los usuarios de la base de datos.
-
 ```haskell
 "/users", method GET $ headersHandler $ runHandler $ genericHandler $ usersIndexHandler
 ```
@@ -484,8 +1067,6 @@ ___
 Luego sigue la concatenación de handlers como ya se explicó previamente.
 
 #### GET /user/:id
-
-Éste endpoint retorna la información del usuario con dicho `:id`. En caso de
 
 ```haskell
 "/user/:id", method GET $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ userHandler
@@ -674,8 +1255,6 @@ Podemos ver que `ExceptT` recibe como argumento el tipo que `runExceptT` retorna
 
 #### GET feed/:id
 
-Éste endpoint retorna todos los posts de los usuarios que el usuario sigue.
-
 ```haskell
 "/feed/:id", method GET $ headersHandler $ runHandler $ genericHandler $ catchHandler $ userIdHandler $ feedHandler
 ```
@@ -748,8 +1327,6 @@ Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos v
 
 #### POST /post
 
-Este endpoint le permite a un usuario enviar un mensaje en el sistema, para ser visto por el resto de los usuarios.
-
 ```haskell
 "/post" ,  method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ postHandler   
 ```
@@ -821,8 +1398,6 @@ Por último se llama a `handler user`, el cual sigue con el flujo de _handlers_.
 
 #### POST /follow
 
-Este endpoint le permite a un usuario A seguir a un usuario B, y por lo tanto le permite al usuario A ver los mensajes que publica el usuario B en su feed.
-
 ```haskell
 "/follow" , method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ followHandler  
 ```
@@ -874,8 +1449,6 @@ Todo esto sucede dentro dentro `followHandler` que es pasado como parametro a la
 
 #### DELETE /user/:id
 
-Este endpoint elimina la cuenta del user con dicho `:id`.
-
 ```haskell
 "/user/:id", method DELETE $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ deleteHandler
 ```
@@ -924,17 +1497,6 @@ En caso de que en la función `deleteHandler` el `user_id` no sea el mismo al `i
 Luego sigue el flujo de handlers con `loginHandler`, que ya fue desarrollado.
 
 #### POST /signup
-
-Éste endpoint crea un usuario recibiendo los siguientes parámetros:
-
-```json
-{
-    user_email: string,
-    user_name: string,
-    user_password: string,
-    user_password_confirmation: string
-}
-```
 
 ```haskell
 "/signup", method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ signUpHandler
