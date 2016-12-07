@@ -35,6 +35,9 @@
 	- [POST /signup](#)
 - [Inicialización del servidor](#)
 - [Estado de la Snaplet](#)
+- [Manejo de errores](#)
+- [Conclusiones](#)
+- [Posibles futuras mejoras](#)
 - [Bibliografía](#)
 
 # Introducción
@@ -1092,7 +1095,7 @@ userHandler :: User -> ExceptT Error AppHandler User
 userHandler user = lift $ return user
 ```
 
-La función `userHandler` lo que hace es poner en el context `AppHanlder` al tipo `User`, quedando `AppHandler User`, y finaliza haciendo un lift de dicha mónada a `ExceptT Error AppHandler User`.
+La función `userHandler` lo que hace es poner en el contexto `AppHanlder` al tipo `User`, quedando `AppHandler User`, y finaliza haciendo un lift de dicha mónada a `ExceptT Error AppHandler User`.
 
 ___
 
@@ -1110,14 +1113,16 @@ userIdHandler handler = do
   handler user
 ```
 
-A ésta función la podemos reescribir de la siguiente manera:
+Podemos ver que la función se encuentra escrita con la _do notation_, por lo que podemos reescribirla de la siguiente manera:
 
 ```haskell
 userIdHandler :: (User -> ExceptT Error AppHandler a) -> ExceptT Error AppHandler a
 userIdHandler handler = (lift $ getParam "id") >>= (\user_id -> (maybe (throwE NullId) (\user_id -> getUserById $ (byteStringToString user_id)) user_id >>= (\user -> handler user)))
 ```
 
-La función `(lift $ getParam "id")` lo que hace es conseguir el parámetro `id` proveniente de la request mediante la función `getParam`, la cual retorna `AppHandler (Maybe ByteString)` y luego le hace un lift a `Except Error AppHandler (Maybe ByteString)`. Por medio del binding se le pasa el valor monádico a la función `(\user_id -> (maybe (throwE NullId) (\user_id -> getUserById $ (byteStringToString user_id)) user_id >>= (\user -> handler user)))`. Comienza con la función `(maybe (throwE NullId) (\user_id -> getUserById $ (byteStringToString user_id)) user_id`, que con la función `maybe`, en caso de que `user_id` sea `Nothing` retorna el error `NullId`, pero si `user_id` es `Just ByteString` entonces le pasa como argumento `user_id` a la función `(\user_id -> getUserById $ (byteStringToString user_id))`, la cual convierte el `ByteString` de `user_id` a `String` para que lo reciba como argumento la función `getUserById`, la cual retorna `ExceptT Error AppHandler User`. Luego, mediante el operador bind la función `(\user -> handler user)` recibe como argumento el valor monádico, siendo el mismo del tipo `User` y llama a la función `handler` con dicho `user`.
+La función `(lift $ getParam "id")` lo que hace es conseguir el parámetro `id` proveniente de la request mediante la función `getParam`, la cual retorna `AppHandler (Maybe ByteString)` y luego le hace un lift a `Except Error AppHandler (Maybe ByteString)`. Luego, por medio del binding se le pasa el valor monádico a la función `(\user_id -> (maybe (throwE NullId) (\user_id -> getUserById $ (byteStringToString user_id)) user_id >>= (\user -> handler user)))`.
+
+Comienza con la función `(maybe (throwE NullId) (\user_id -> getUserById $ (byteStringToString user_id)) user_id`, que con la función `maybe`, en caso de que `user_id` sea `Nothing` retorna el error `NullId`, pero si `user_id` es `Just ByteString` entonces le pasa como argumento `user_id` a la función `(\user_id -> getUserById $ (byteStringToString user_id))`, la cual convierte el `ByteString` de `user_id` a `String` para que lo reciba como argumento la función `getUserById`, la cual retorna `ExceptT Error AppHandler User`. Luego, mediante el operador **bind** la función `(\user -> handler user)` recibe como argumento el valor monádico, siendo el mismo del tipo `User` y llama a la función `handler` con dicho `user`.
 
 ___
 
@@ -1162,7 +1167,7 @@ La función
     Right success -> return (Right success)))
 ```
 
-comienza con `runExceptT handler`, haciendo que del tipo `ExceptT e m a` pasemos a tener `m a`, en nuestro caso, pasamos del tipo `ExceptT Error AppHandler a` al tipo `AppHandler a`. Luego, ésto se pasa como argumento mediante el operador bind a la función
+comienza con `runExceptT handler`, haciendo que del tipo `ExceptT e m a` pasemos a tener `m a`, en nuestro caso, pasamos del tipo `ExceptT Error AppHandler a` al tipo `AppHandler a`. Luego, ésto se pasa como argumento mediante el operador **bind** a la función
 
 ```haskell
 (\x -> case x of
@@ -1170,7 +1175,7 @@ comienza con `runExceptT handler`, haciendo que del tipo `ExceptT e m a` pasemos
     Right success -> return (Right success))
 ```
 
-Ésta función analiza el valor de `x`, y en caso de que sea `Left` se llama a la función `runExceptT (errorHandler failure)`, la cual le pasa como argumento el error (de tipo `Error`) a la función `errorHandler` (que recordemos que tenía el tipo `e -> ExceptT c m a`, siendo nuestro caso `Error -> ExceptT Error AppHandler a`), y luego se le pasa como argumento a la función `runExceptT` el retorno de la función `errorHandler` (siendo del tipo `ExceptT Error AppHandler a`), pasándolo al tipo `AppHandler a`. Ahora, en caso de que sea `Right` se llama a `Right` del parámetro `success` y se lo pone en el contexto de `AppHandler` con la función `return`.
+Ésta función analiza el valor de `x`, y en caso de que sea `Left` se llama a la función `runExceptT (errorHandler failure)`, la cual le pasa como argumento el error (de tipo `Error`) a la función `errorHandler` (que recordemos que tenía el tipo `e -> ExceptT c m a`, siendo nuestro caso `Error -> ExceptT Error AppHandler a`), y luego se le pasa como argumento a la función `runExceptT` el retorno de la función `errorHandler` (siendo del tipo `ExceptT Error AppHandler a`), pasándolo al tipo `AppHandler a`. En caso de que sea `Right` se llama a `Right` del parámetro `success` y se lo pone en el contexto de `AppHandler` con la función `return`.
 
 Por úlitmo mediante `ExceptT $` se crea el tipo de dato `ExceptT c m a`, siendo el caso de la función `catchHandler` `ExceptT Error AppHandler a`.
 
@@ -1323,7 +1328,7 @@ Simular a las funciones que realizan la query a la base de datos, la función re
 
 Volviendo a la función `getFollowedsById`, una vez que obtenemos los `follows`, iteramos sobre éstos con `filter`, quedándonos con aquellos cuyo `follower_id` es equivalente al `uid` del `user`. Luego con el `return` se pone en contexto al nuevo array de `Follow` con `AppHandler [Follow]`, y por último, se hace un `lift` de dicha mónada a `ExceptT Error AppHandler [Follow]`.
 
-Otra vez, volviendo a la función `getFollowedPostsByUserId` y ya teniendo dichos `follows`, se hace un `map` de los mismos llamando a la función `getPostByUserId`, la cual recibe un `Int` t retorna `ExceptT Error AppHandler [Post]`.
+Otra vez, volviendo a la función `getFollowedPostsByUserId` y ya teniendo dichos `follows`, se hace un `map` de los mismos llamando a la función `getPostByUserId`, la cual recibe un `Int` y retorna `ExceptT Error AppHandler [Post]`.
 
 ```haskell
 getPostByUserId :: Int -> ExceptT Error AppHandler [Post]
@@ -1343,7 +1348,7 @@ Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos v
 ```
 ___
 
-`postHandler` es una función que recibe un `User` por parametro y retorna `ExceptT Error AppHandler Post`, es decir que retornara el posteo que se realizó o un error si lo hubiera.
+`postHandler` es una función que recibe un `User` por parámetro y retorna `ExceptT Error AppHandler Post`, es decir que retornara el posteo que se realizó o un error si lo hubiera.
 
 ```haskell
 postHandler :: User -> ExceptT Error AppHandler Post
@@ -1358,7 +1363,7 @@ postHandler user = do
 postHandler user = nullCheck NullMessage (lift . return) "user_message" >>= (user_message -> createPost (byteStringToString user_message) user)
 ```
 
-`nullCheck NullMessage (lift . return) "user_message"` chequeara si el parametro "user_message" ha sido enviado entre los parametros del `POST` y retorna `ExceptT Error AppHandler BS.ByteString`. En caso de que el usuario no haya envíado el parametro habremos lanzado el `Error` `NullMessage`, si se envío tendremos un `AppHandler BS.ByteString` con el mensaje que el usuario quiere enviar. Luego el valor monádico es pasado por parametro a la función ` createPost (byteStringToString user_message) user`. La función transforma el parametro `user_message` de `BS.ByteString` a `String` mediante la función `byteStringToString` y ejecuta la función `createPost` con el mensaje que usuario desea publicar y el `User` en cuestión.
+`nullCheck NullMessage (lift . return) "user_message"` chequeara si el parametro *user_message* ha sido enviado entre los parametros del `POST` y retorna `ExceptT Error AppHandler BS.ByteString`. En caso de que el usuario no haya envíado el parametro habremos lanzado el `Error` `NullMessage`, si se envío tendremos un `AppHandler BS.ByteString` con el mensaje que el usuario quiere enviar. Luego el valor monádico es pasado por parametro a la función ` createPost (byteStringToString user_message) user`. La función transforma el parametro `user_message` de `BS.ByteString` a `String` mediante la función `byteStringToString` y ejecuta la función `createPost` con el mensaje que usuario desea publicar y el `User` en cuestión.
 
 ```haskell
 createPost :: String -> User -> ExceptT Error AppHandler Post
@@ -1374,7 +1379,7 @@ createPost :: String -> User -> ExceptT Error AppHandler Post
 createPost message user = do
   (lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)) >> (lift. return $ Post message (uid user))
 ```
-La función `lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)` ejecuta la unción `execute` pasando como primer parametro un `String` query y como segundo una tupla con los valores a insertar en la query. Esta función se ejecuta en el contexto de la `Snaplet` pg gracias a la función with, y retorna por resultado `AppHandler Post` que es lifteado a `ExceptT Error AppHandler Post`. Luego mediante el operador `>>` se ejecuta la función `(lift. return $ Post message (uid user)`, que crea un valor de tipo `Post` mediante la función `Post` y los parametros `message` y el id del `User` (obtenido mediante `uid user`). Al valor `Post` se le agrega un contexto mediante la función `lift . return` por lo que el tipo retornado es `ExceptT Error AppHandler Post`.
+La función `lift $ with pg $ execute "INSERT INTO posts (message,user_id) VALUES (?,?)" (message,uid user)` ejecuta la unción `execute` pasando como primer parametro un `String` query y como segundo una tupla con los valores a insertar en la query. Esta función se ejecuta en el contexto de la `Snaplet` `pg` gracias a la función `with`, y retorna por resultado `AppHandler Post` que es lifteado a `ExceptT Error AppHandler Post`. Luego mediante el operador `>>` se ejecuta la función `(lift. return $ Post message (uid user)`, que crea un valor de tipo `Post` mediante la función `Post` y los parámetros `message` y el id del `User` (obtenido mediante `uid user`). Al valor `Post` se le agrega un contexto mediante la función `lift . return` por lo que el tipo retornado es `ExceptT Error AppHandler Post`.
 
 Todo esto sucede dentro dentro `postHandler` que es pasado como parametro a la función `loginHandler`.
 
@@ -1413,7 +1418,7 @@ Por último se llama a `handler user`, el cual sigue con el flujo de _handlers_.
 "/follow" , method POST $ headersHandler $ runHandler $ genericHandler $ catchHandler $ loginHandler $ followHandler  
 ```
 
-`followHandler` es una función que recibe como parametro un `User`, el usuario A en el ejemplo anterior, y retorna un `ExceptT Error AppHandler Follow` con el valor `Follow` en caso de que se haya logrado la acción o un valor `Error` en caso de que hubiera habído un fallo.
+`followHandler` es una función que recibe como parámetro un `User`, el usuario A en el ejemplo anterior, y retorna un `ExceptT Error AppHandler Follow` con el valor `Follow` en caso de que se haya logrado la acción o un valor `Error` en caso de que hubiera habído un fallo.
 
 ```haskell
 followHandler :: User -> ExceptT Error AppHandler Follow
@@ -1432,11 +1437,11 @@ followHandler follower =
   (followed -> if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed)    
 ```
 
-La función `nullCheck NullFollowerId (lift . return) "followed_id"` chequea si el parametro "followed_id" ha sido enviado entre los parametros del `POST` y retorna `ExceptT Error AppHandler BS.ByteString`. En caso de que el usuario no haya envíado el parametro habremos lanzado el `Error` `NullFollowerId`, si se envío tendremos un `AppHandler BS.ByteString` con el id del `User` ha seguir.
+La función `nullCheck NullFollowerId (lift . return) "followed_id"` chequea si el parametro "followed_id" ha sido enviado entre los parametros del `POST` y retorna `ExceptT Error AppHandler BS.ByteString`. En caso de que el usuario no haya envíado el parámetro habremos lanzado el `Error` `NullFollowerId`, si se envío tendremos un `AppHandler BS.ByteString` con el id del `User` ha seguir.
 
-Luego el valor monádico es pasado por parametro a la función `followed_id -> getUserById $ (byteStringToString followed_id)`. La función transforma el parametro `followed_id` de `BS.ByteString` a `String` mediante la función `byteStringToString` y este valos es recibido por parametro por la función `getUserById`, que como se explico anteriormente retorna un valor de tipo `ExceptT Error AppHandler User` con el `User` ha seguir en cuestion o un `Error`.
+Luego el valor monádico es pasado por parámetro a la función `followed_id -> getUserById $ (byteStringToString followed_id)`. La función transforma el parámetro `followed_id` de `BS.ByteString` a `String` mediante la función `byteStringToString` y este valos es recibido por parámetro por la función `getUserById`, que como se explico anteriormente retorna un valor de tipo `ExceptT Error AppHandler User` con el `User` ha seguir en cuestion o un `Error`.
 
-Luego el valor monádico es pasado por parametro a la función `followed -> if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed`, la cual verifica que el `User` no se este intentando seguir a si mismo y en cuyo canzo lanza un `Error` `InvalidFollow`. Si el `User` trata de seguir a otro usuario distinto de el se ejecutara a función `subscribe` con ambos usarios como parametros.
+Luego el valor monádico es pasado por parámetro a la función `followed -> if uid follower == uid followed then throwE InvalidFollow else subscribe follower followed`, la cual verifica que el `User` no se este intentando seguir a si mismo y en cuyo canzo lanza un `Error` `InvalidFollow`. Si el `User` trata de seguir a otro usuario distinto de el se ejecutara a función `subscribe` con ambos usarios como parámetros.
 
 ```haskell
 subscribe :: User -> User -> ExceptT Error AppHandler Follow
@@ -1453,7 +1458,7 @@ subscribe follower followed = do
   (lift . return $ Follow (uid follower) (uid followed))
 ```
 
-La función `lift $ with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)` ejecuta la función `execute` pasando como primer parametro un `String` query y como segundo una tupla con los valores a insertar en la query, en este caso los id de ambos usuarios. Esta función se ejecuta en el contexto de la `Snaplet` `pg` gracias a la función with, y retorna por resultado `AppHandler Follow` que es lifteado a `ExceptT Error AppHandler Follow`. Luego mediante el operador `>>` se ejecuta la función `(lift . return $ Follow (uid follower) (uid followed)`, que crea un valor de tipo `Follow` mediante la función `Follow` y los id de los usuario implicados obtenidos a partir de los parametros `User` que se le pasaron a `subscribe`. Al valor `Follow` se le agrega un contexto mediante la función `lift . return` por lo que el tipo retornado es `ExceptT Error AppHandler Follow`.
+La función `lift $ with pg $ execute "INSERT INTO relationships (follower_id,followed_id) VALUES (?,?)" (uid follower,uid followed)` ejecuta la función `execute` pasando como primer parámetro un `String` query y como segundo una tupla con los valores a insertar en la query, en este caso los id de ambos usuarios. Esta función se ejecuta en el contexto de la `Snaplet` `pg` gracias a la función with, y retorna por resultado `AppHandler Follow` que es lifteado a `ExceptT Error AppHandler Follow`. Luego mediante el operador `>>` se ejecuta la función `(lift . return $ Follow (uid follower) (uid followed)`, que crea un valor de tipo `Follow` mediante la función `Follow` y los id de los usuario implicados obtenidos a partir de los parámetros `User` que se le pasaron a `subscribe`. Al valor `Follow` se le agrega un contexto mediante la función `lift . return` por lo que el tipo retornado es `ExceptT Error AppHandler Follow`.
 
 Todo esto sucede dentro dentro `followHandler` que es pasado como parametro a la función `loginHandler`, la cual ya fue explicada anteriormente.
 
@@ -1535,7 +1540,7 @@ Luego, valida si el valor ingresado en `user_password` coincide con `user_passwo
 (do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken) `catchE` (signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))
 ```
 
-Se hace uso de la función `catchE` llamada de forma infija (explicada previamente). De la izquierda (`do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken`) se fija si el email del usuario nuevo a crear ya existe, y en caso de que exista se llama a la función `throwE` con el error `EmailAlreadyTaken`. Dicha parte retorna `ExceptT Error AppHandler User`. De la derecha (`(signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))`) llama a la función `signUpNoSuchUserHandler`, la cual recibe como parámetro tres `String`, un `Error` y finalmente retorna `ExceptT Error AppHandler User`.
+Se hace uso de la función `catchE` llamada de forma infija (explicada previamente). De la izquierda (`do getUserByEmail (byteStringToString user_email); throwE EmailAlreadyTaken`) se fija si el email del usuario nuevo a crear ya existe, y en caso de que exista se llama a la función `throwE` con el error `EmailAlreadyTaken`. Dicha parte retorna `ExceptT Error AppHandler User`. De la derecha (`(signUpNoSuchUserHandler (byteStringToString user_email) (byteStringToString user_name) (byteStringToString user_password))`) se llama a la función `signUpNoSuchUserHandler`, la cual recibe como parámetro tres `String`, un `Error` y finalmente retorna `ExceptT Error AppHandler User`.
 
 ```haskell
 signUpNoSuchUserHandler :: String -> String -> String -> Error -> ExceptT Error AppHandler User
@@ -1578,7 +1583,7 @@ Luego sigue el flujo de handlers con `catchHandler`, el cual ya fue desarrollado
 ___
 ### Inicialización del servidor
 
-El punto de entrada al programa es la función main, que tiene por tipo la monada IO.
+El punto de entrada al programa es la función `main`, que tiene por tipo la monada IO.
 
 ```haskell
 main :: IO ()
@@ -1593,18 +1598,21 @@ La misma puede ser reescrita como
 main :: IO ()
 main = runSnaplet Nothing haskitterInit (\_ site _ -> quickHttpServe site)
 ```
-La función ejecutar `runSnaplet`
+La función ejecuta `runSnaplet`
 
 ```haskell
 runSnaplet :: Maybe String -> SnapletInit b b -> IO (Text, Snap (), IO ())
 ```
 
-Recibe un `Maybe String`, y un inicializador de `Snaplet` (`SnapletInit`). el string indica cuales son los nombres de los archivos de configuración tuilizados por cada Snaplet y en caso de recibir Nothing se utiliza `Just "devel"`. `runSnap` retorna una monada IO cuyos valores monádicos son
+`runSnaplet` recibe un `Maybe String`, y un inicializador de `Snaplet` (`SnapletInit`). El `String` indica cuales son los nombres de los archivos de configuración tuilizados por cada Snaplet y en caso de recibir `Nothing` se utiliza `Just "devel"`.
+
+`runSnap` retorna una monada IO cuyos valores monádicos son:
+
 - `Text` la concatenación de todos los logs durante la inicialización
 - `Snap ()` el handler de `Snap` que ha sido extendido por nuestros handlers de tipo `MonadSnap`
 - `IO ()` una acción de limpieza en ante el shutdown de la aplicación
 
-Luego el handler snap es pasado como parametro mediante el operador bind `>>=` a la función `(\_ handler _ -> quickHttpServe handler)` que comienza el servidor HTTP utilizando el handler pasado por parametro. Los parametros para la configuración del servidor son obtenidos por la linea de comandos.
+Luego el handler `snap` es pasado como parametro mediante el operador bind `>>=` a la función `(\_ handler _ -> quickHttpServe handler)` que comienza el servidor HTTP utilizando el handler pasado por parámetro. Los parámetros para la configuración del servidor son obtenidos por la línea de comandos.
 
 ```Haskell
 quickHttpServe :: Snap () -> IO ()
@@ -1612,7 +1620,7 @@ quickHttpServe :: Snap () -> IO ()
 
 SnapletInit `quickHttpServe` no retorna nunca. Si se quiere apagar el servidor se debe matar el thread que lo corre.
 
-`haskitterInit` es la función pasada como segundo parametro a `runSnaplet`. `haskitterInit` no recibe ningun parametro y retorna `SnapletInit Haskitter Haskitter`. Por otro lado el tipo `SnapletInit b v` se utiliza para obtener garantias en tiempo de compliación de que la `Snaplet` fue creada utilizando `makeSnaplet`, `nestSnaplet` o `embedSnaplet`.
+`haskitterInit` es la función pasada como segundo parámetro a `runSnaplet`. `haskitterInit` no recibe ningun parámetro y retorna `SnapletInit Haskitter Haskitter`. Por otro lado el tipo `SnapletInit b v` se utiliza para obtener garantias en tiempo de compliación de que la `Snaplet` fue creada utilizando `makeSnaplet`, `nestSnaplet` o `embedSnaplet`.
 
 ```Haskell
 haskitterInit :: SnapletInit Haskitter Haskitter
@@ -1622,7 +1630,7 @@ haskitterInit = makeSnaplet "haskitter" "A simple twitter api written in Haskell
   return $ Haskitter { _pg = p}
 ```
 
-`haskitterInit` se puede rescribir cómo
+`haskitterInit` al estar escrita mediante la forma _do notation_ se puede reescribir de la siguiente manera:
 
 ```Haskell
 haskitterInit :: SnapletInit Haskitter Haskitter
@@ -1633,7 +1641,7 @@ haskitterInit = makeSnaplet "haskitter" "A simple twitter api written in Haskell
 
 - `Text` un id para identificar al `Snaplet`  
 - `Text` una descripción del `Snaplet`
-- `Maybe (IO FilePath)` el path al directorio root de para la `Snaplet`
+- `Maybe (IO FilePath)` el path al directorio root para la `Snaplet`
     + En nuestro caso utilizamos `Nothing`, por lo que la `Snaplet` no copiará los archivos que genera automáticamente a ese directorio.
 - `Initializer b v v` el inicializador de la `Snaplet`.
 
@@ -1641,7 +1649,7 @@ haskitterInit = makeSnaplet "haskitter" "A simple twitter api written in Haskell
 makeSnaplet :: Text -> Text -> -> Maybe (IO FilePath) -> Initializer b v v -> SnapletInit b v
 ```
 
-El inicializador de la `Snaplet` se obtiene como retorno de la función `nestSnaplet "pg" pg pgsInit >>= (\p -> addRoutes routes >> return $ Haskitter { _pg = p})`. Luego makeSnaplet toma el `Initializer b v v` como parametro y retorna un `SnapInit Haskitter Haskitter`.
+El inicializador de la `Snaplet` se obtiene como retorno de la función `nestSnaplet "pg" pg pgsInit >>= (\p -> addRoutes routes >> return $ Haskitter { _pg = p})`. Luego makeSnaplet toma el `Initializer b v v` como parámetro y retorna un `SnapInit Haskitter Haskitter`.
 
 Analizemos la función `nestSnaplet "pg" pg pgsInit >>= (\p -> addRoutes routes >> return $ Haskitter { _pg = p})` que retorna el `Initializer b v v` en detalle.
 
@@ -1651,12 +1659,12 @@ nestSnapletSource :: ByteString -> SnapletLens v v1 -> SnapletInit b v1 -> Initi
 
 `nestSnapletSource` recibe  
 - `ByteString` una url que simboloza la ruta de la `Snaplet`
-- `SnapletLens` el lens que identifca a la `Snaplet`
-- `SnapInit` la función inicializadora uan `Snaplet`
+- `SnapletLens` el _lens_ que identifca a la `Snaplet`
+- `SnapInit` la función inicializadora de una `Snaplet`
 
-`nestSnapletSource` ejecuta el incializar y retorna la `Snaplet` inicializada. Al usar `nestSnapletSource` permitimos que la `Snaplet` anidada tenga acceso al estado base de la `Snaplet` actual. Por lo tanto en la función `nestSnaplet "pg" pg pgsInit` estas permitiendo que la `Snaplet` `pg` tenga acceso al estado base de la `Snaplet` `Snap`.
+`nestSnapletSource` ejecuta el incializar y retorna la `Snaplet` inicializada. Al usar `nestSnapletSource` permitimos que la `Snaplet` anidada tenga acceso al estado base de la `Snaplet` actual. Por lo tanto en la función `nestSnaplet "pg" pg pgsInit` se está permitiendo que la `Snaplet` `pg` tenga acceso al estado base de la `Snaplet` `Snap`.
 
-El valor monadico de la `Snaplet` (`Monad`) inicializada retornada por `nestSnaplet "pg" pg pgsInit` es recibida por parametro por la función  `(\p -> addRoutes routes >> return $ Haskitter { _pg = p})` por el operador bind `>>=`.
+El valor monadico de la `Snaplet` (`Monad`) inicializada retornada por `nestSnaplet "pg" pg pgsInit` es recibida por parámetro por la función  `(\p -> addRoutes routes >> return $ Haskitter { _pg = p})` por el operador bind `>>=`.
 
 ```Haskell
 addRoutes :: [(ByteString, Handler b v ())] -> Initializer b v ()
@@ -1664,7 +1672,7 @@ addRoutes :: [(ByteString, Handler b v ())] -> Initializer b v ()
 
 `addRoutes` agrega routeo al handler actual, y se mergea con el ruteo principal. Como el ruteo principal esta definido como "/", si se ejecuta `addRoutes :: [("/handler", handler)]` el ruteo de `handler` será "/handler".  
 
-El inicializador (`Monad`) retornado por `addRoutes` es pasado por parametro a la función `return $ Haskitter { _pg = p})`, que accede a p del contexto de la `Monad` e inicializa la `Snaplet` `Haskitter`, retornado un `Initializer`. Este `Initializer` es utilizado por makeSnaplet para retonar un `SnapletInit` para inicializar la `Snaplet`, que será el servidor.
+El inicializador (`Monad`) retornado por `addRoutes` es pasado por parámetro a la función `return $ Haskitter { _pg = p})`, que accede a `p` del contexto de la `Monad` e inicializa la `Snaplet` `Haskitter`, retornado un `Initializer`. Este `Initializer` es utilizado por makeSnaplet para retonar un `SnapletInit` para inicializar la `Snaplet`, que será el servidor.
 
 ### Estado de la Snaplet
 
@@ -1678,7 +1686,7 @@ makeLenses ''Haskitter
 
 ```
 
-`makeLenses` simplemente genera un `Lens` para cada campo de la `Snaplet` que comienza con un `_`. Un `Lens` puede entender como una referencia en el paradigma funcional, que nos permite consultar y setear valores del mismo. El `Lens` de `pg` fue utilizado durante todo el desarrollo para poder acceder a la `Snaplet Postgres` y asi poder consultar y escribir la base de datos.
+`makeLenses` simplemente genera un `Lens` para cada campo de la `Snaplet` que comienza con un `_`. Un `Lens` se puede entender como una referencia en el paradigma funcional, que nos permite consultar y setear valores del mismo. El `Lens` de `pg` fue utilizado durante todo el desarrollo para poder acceder a la `Snaplet Postgres` y asi poder consultar y escribir la base de datos.
 
 ```Haskell
 type AppHandler = Handler Haskitter Haskitter
@@ -1758,6 +1766,13 @@ Se puede acceder a [este](https://github.com/lkania/Haskitter/tree/2a4664c0e82e7
 Luego de un año de trabajo con el framework Snap, podemos decir que el mismo tiene ciertas desventajas las cuales sufrimos a lo largo del desarrollo, como por ejemplo la falta de mantenimiento por parte de los creadores y su falta de documentación. Sin embargo, de los frameworks para desarrollo web basados en Haskell (existen otros como Yesod y Happstack) es el que más permite utilizar Haskell puro y sin muchos tipos pertenecientes al framework. Esta cualidad es la que nos permitió ganar un gran entendimiento de `Functors`, `Applicative functors`, `Monad` y `Monad Transformers`. Sobre todo los últimos dos conceptos se ven muy bien reflejados en el desarrollo web debido a todos los cambios de contexto que suceden entre la base de datos, las funciones puras y el procesamiento de las HTTP Request y Response.
 
 Por último consideramos al manejo de errores que no interrumpe la ejecución normal de la aplicación como uno de los grandes aprendizajes del proyecto, y del poder del paradigma funcional.
+
+### Posibles futuras mejoras
+
+- Que en caso de error la API retorne distintos _status codes_.
+- Autenticación por header en lugar de enviar siempre usuario y contraseña.
+- Encriptación de la contraseña a nivel base de datos.
+- Validación de los posibles errores de base de datos.
 
 ### Bibliografía
 
