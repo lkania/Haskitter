@@ -1339,7 +1339,23 @@ getPostByUserId userId = do
 
 La misma llama a `getPosts` (ya explicada) que retorna todos los posts de la base de datos. Luego mediante la función `filter` se queda con los posts cuyo `user_id` coincida con el `userId` enviado como argumento a la función. Por útlimo a dicho array se lo pone en contexto con `AppHandler` mediante el `return`, y se le hace un `lift` para llevarlo a `ExceptT Error AppHandler [Post]`.
 
-Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos valores obtenemos un array de `ExceptT Error AppHandler [Post]`, siendo con la función `concatListAppHandlerList` la que nos lo convierte a `ExceptT Error AppHandler [Post]`, siendo lo que finalmente retorna la función, para luego así seguir con el flujo de handlers.
+Por úlitmo en la función `getFollowedPostsByUserId`, una vez mapeados dichos valores obtenemos un array de `ExceptT Error AppHandler [Post]` (`[ExceptT Error AppHandler [Post]]`). Luego se llama a la función `concatListAppHandlerList`, que se encarga de pasar dicho array a `ExceptT Error AppHandler [Post]`.
+
+```haskell
+concatListAppHandlerList :: Monad m => [m [a]] -> m [a]
+concatListAppHandlerList = foldr (\x xs -> concatListAppHandler x xs) (return [])
+```
+
+Similar a la función `concatAppHandlerList` explicada previamente, la función de `concatListAppHandlerList` es la de aplicar `concatListAppHandler` a todo elemento de `[m [a]]` de manera tal que que el valor monádico `[a]` de cada elemento del array se concatene a otro array.
+
+```haskell
+concatListAppHandler :: Monad m => m [a] -> m [a] -> m [a]
+concatListAppHandler m1 m2 = m1 >>= (\a -> m2 >>= (\b -> return $ a ++ b ))
+```
+
+La función `concatListAppHandler` recibe dos argumentos, siendo dos mónadas con valor monádico `[a]`, y mediante el operador `>>=` obtiene el valor monádico de ambas, para luego concatenar dichos arrays, wrapeando el resultado en su contexto mediante la función `return`.
+
+Luego se sigue con la concatenación de handlers como ya se explicó previamente.
 
 #### POST /post
 
