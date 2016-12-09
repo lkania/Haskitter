@@ -42,11 +42,11 @@
 
 # Introducción
 
-El objetivo del trabajo práctico fue el de desarrollar una _Web API_ aplicando los conceptos aprendidos a lo largo de la materia.
+El objetivo del trabajo práctico fue el de desarrollar una _Web API_ aplicando los conceptos aprendidos a lo largo de la materia y profundizar en nuevos temas relacionados con efectos secundarios.
 
 Para el desarrollo de la misma se utilizó **Snap**, un framework Web escrito en Haskell el cual contiene una librería para el manejo del protocolo HTTP.
 
-La API desarrollada responde a un modelo parecido a Twitter (de ahí proviene la derivación del nombre **Haskitter**, Haskell y Twitter). La misma permite crear usuarios, publicar tweets (publicaciones), seguir a otros usuarios y otras acciones que se detallarán a lo largo del informe.
+La API desarrollada responde a un funcionamiento parecido a Twitter (de ahí proviene la derivación del nombre **Haskitter**, Haskell y Twitter). La misma permite crear usuarios, publicar tweets (publicaciones), seguir a otros usuarios y otras acciones que se detallarán a lo largo del informe.
 
 # Uso de la API
 
@@ -62,11 +62,11 @@ La API desarrollada responde a un modelo parecido a Twitter (de ahí proviene la
     POST /signup
     DELETE /user/:id
 
-A continuación se detalla la documentación con ejemplos para cada _endpoint_.
+A continuación se detalla la documentación con ejemplos para cada _endpoint_. Las ejemplos fueron realizados contra una instancia de la aplicación hosteada en Amazon Web Services, la cual puede accederse desde la siguiente dirección: `ec2-52-67-118-248.sa-east-1.compute.amazonaws.com:8000`.
 
 ### GET /posts
 
-Éste endpoint retorna todos los posts de la base de datos.
+Éste endpoint retorna todos los posts publicados por usuarios.
 
 #### Request
 ##### Headers
@@ -103,7 +103,7 @@ Transfer-Encoding: chunked
 
 ### GET /postsWithUser
 
-Éste endpoint retorna todos los posts de la base de datos con el usuario que los creó asociado.
+Éste endpoint retorna todos los posts publicados junto al usuario que los creó.
 
 #### Request
 ##### Headers
@@ -154,7 +154,7 @@ Transfer-Encoding: chunked
 
 ### GET /users
 
-Éste endpoint retorna todos los usuarios de la base de datos.
+Éste endpoint retorna todos los usuarios registrados en la aplicación.
 
 #### Request
 ##### Headers
@@ -326,7 +326,7 @@ Transfer-Encoding: chunked
 
 ### POST /post
 
-Este endpoint le permite a un usuario enviar un mensaje en el sistema, para ser visto por el resto de los usuarios.
+Este endpoint le permite a un usuario enviar un mensaje al sistema, para ser visto por el resto de los usuarios.
 
 #### Parámetros
 
@@ -477,7 +477,7 @@ Transfer-Encoding: chunked
 
 ### POST /signup
 
-Éste endpoint crea un usuario.
+Éste endpoint permite registrarse en el sistema, creando un nuevo usuario.
 
 #### Parámetros
 
@@ -549,7 +549,7 @@ Transfer-Encoding: chunked
 }
 ```
 
-##### Body cuando la request no tiene *user_name
+##### Body cuando la request no tiene *user_name*
 ```json
 {
     "error": "User name is null"
@@ -576,7 +576,7 @@ Este endpoint elimina la cuenta del user con dicho `:id`.
 
 ### Parámetros
 
-    user_id: string [se valida que sea el mismo que en la url para validar la acción y  que no se borre por error]
+    user_id: string [se valida que sea el mismo que en la url para validar la acción y que no se borre por error]
     user_email: string
     user_password: string
 
@@ -698,16 +698,17 @@ data Follow = Follow { follower_id :: Int, followed_id :: Int }
 
 `Snap` es un framework de desarrollo web escrito en Haskell.
 
-`Snap` en si, es una monada en la cual podremos integrar `Handler` que atiendan diferentes rutas.
-La misma provee un contexto que permite a cada `Handler`
+`Snap` en si, es una monada en la cual podremos integrar diferentes `Handler` que atiendan diferentes rutas.
+
+La misma provee un contexto que le permite a cada `Handler`
 
 * acceder o modificar una HTTP Request
 * acceder o modificar una HTTP Response
 * setear un tiempo maximo de inactividad para cada thread  
 
-Mediante la utilización de `MonadSnap` podemos extener el funcionamiento de la monada `Snap`, su funcionamiento es equivalente a `MonadIO` permitiendonos acceder a la monada `Snap` en cualquier momento.
+Mediante la utilización de `MonadSnap` podemos extener el funcionamiento de la monada `Snap`. Su funcionamiento es equivalente a `MonadIO` para `IO` permitiendonos acceder a la monada `Snap` en cualquier momento.
 
-Una de las grandes decisiones de `Snap`, fue la creación de `Saplet`. La misma es una aplicaición web, por lo que podemos desarrollar nuestros aplicaciones web de forma modular y componiendo aplicaciones web. Todo el servicio de Haskitter que desarrollaremos en este trabajo será una `Snaplet` que puede ser reutilizada por cualquier otra aplicaciòn web y que a su vez utiliza otras `Snaplet`, en nuestro caso una que nos permite la comunicación con una base de datos PostgreSQL.
+Una de las grandes decisiones de `Snap`, fue la creación de `Saplet`. La misma es una aplicación web, por lo que podemos desarrollar nuestros aplicaciones web de forma modular y componiendo otras aplicaciones web. Todo el servicio de Haskitter que desarrollaremos en este trabajo será una `Snaplet` que puede ser reutilizada por cualquier otra aplicación web y que a su vez utiliza otras `Snaplet`, en nuestro caso utilizaremos una que nos permite la comunicación con una base de datos PostgreSQL.
 
 Una `Snaplet` nos provee de
 
@@ -723,7 +724,7 @@ Una `Snaplet` nos provee de
 
   El estado de la aplicación web debe estar disponible sin necesidad de ser pasado por parametro.
 
-Cada `Snaplet` tiene su dierctorio de donde leer la configuración y almacenar archivos. y propio `Initializer` que decide como interpretar la configraución inicial, decide que URLs se manejaran y establece el estado incial de la `Snaplet`. Además cada una tendra estados en memoria definidos por el usuario a través de un sumple Haskell Record.
+Cada `Snaplet` tiene su directorio de donde leer la configuración y almacenar archivos. y propio `Initializer` que decide como interpretar la configuración inicial, decide que URLs se manejaran y establece el estado inicial de la `Snaplet`. Además cada una tendrá estados en memoria definidos por el usuario a través de un simple Haskell Record.
 
 # Conceptos claves
 
@@ -754,9 +755,9 @@ Otra forma de escribirlo sería
         fmap = (.)
 ```
 
-Esto significa que mapear una funcion sobre otra devuelve una funcion. Y este mapeo es la composicion de aquellas funciones.
+Esto significa que mapear una funcion sobre otra devuelve una función. Y este mapeo es la composicion de aquellas funciones.
 
-### Applicative functors
+### Applicative Functors
 
 Es un _Typeclass_ que básicamente permite aplicar **functors** a **functors**. Con **functors** podiamos aplicar funciones a **functors**, pero no podíamos aplicar **functors** a **functors**. Esto es lo que resuelve **Applicative Functors**.
 
@@ -766,7 +767,7 @@ Es un _Typeclass_ que básicamente permite aplicar **functors** a **functors**. 
         (<*>) :: f (a -> b) -> f a -> f b
 ```
 
-La función pure lo que hace es tomar un valor `a` y ponerlo en el contexto del **functor** `f` que recibe. Podemos ver que `pure f <*> x` es igual a `fmap f x` por lo siguiente: `pure f` pone en contexto a `f` con el constructor de `x`, luego, por la definición de la función queda `fmap f x`.
+La función pure lo que hace es tomar un valor `a` y ponerlo en el contexto del **functor** `f` que recibe. Podemos ver que `pure f <*> x` es igual a `fmap f x` por lo siguiente: `pure f` pone en contexto a `f` con el constructor de `x`, luego, por la definición de la función `(<*>)` queda `fmap f x`.
 
 Entonces nos queda una función infija definida de la siguiente manera:
 
@@ -802,9 +803,7 @@ y se aplica `fmap User field`. `field` contiene el primer valor de `uid` en un c
     Contexto (User uid) <*> Contexto (email)
 ```
 
-Aca tenemos un **Applicative functor**, y lo que se realiza es `fmap (User uid) (Contexto email)` y retornara `Contexto (User uid email)`.
-
-Entonces se aplica la funcion `User uid` a `email` y se la wrapea en el contexto. Quedando `Contexto (User uid)`.
+Aca tenemos un **Applicative functor**, y lo que se realiza es `fmap (User uid) (Contexto email)` y retornara `Contexto (User uid email)`. Entonces lo que sucede es que se aplica la funcion `User uid` a `email` y se la wrapea en el contexto. Quedando `Contexto (User uid email)`.
 
 ### Monad
 
@@ -824,7 +823,7 @@ Toda **Monad** es un **Applicative Functor**, a pesar de que la clase Monad no l
 ```
 
 `return`: Toma algo y lo wrapea en una mónada. Es equivalente a `pure` de **Applicative Functors**. Para `Maybe` toma un valor y lo wrappea en un `Just`. (No confundir `return` con el `return` de otros lenguajes, solamente toma un valor y lo pone dentro de un contexto).
-`>>=` (bind): Toma una mónada (un valor dentro de un contexto) y se lo entrega a una función que recibe un valor monádico, pero que retorna una mónada.
+`>>=` (bind): Toma el valor monádico de una mónada y se lo entrega a una función que recibe un valor monádico, pero que retorna una mónada.
 `fail`: Es utilizado por Haskell para tratar los errores con las mónadas.
 
 ### Monad Transformers
@@ -840,14 +839,13 @@ La convención indica que también existe un método `run` que nos permite volve
 _______________________________________
 # Análisis del proyecto
 
-Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers, detallando el flujo desde que llega una _http request_ hasta que se retorna la _http respsonse_ para cada endpoint.
+Cada ruta llama a su correspondiente handler, el cual está compuesto por una concatenación de funciones. A continuación vamos a explicar que retornan las distintas rutas y cómo hacen uso de dichos handlers, detallando el flujo desde que llega una _http request_ hasta que se retorna la _http response_ para cada endpoint.
 
 #### GET /posts
 
 ```haskell
 "/posts" , method GET $ headersHandler $ runHandler $ genericHandler $ postsIndexHandler
 ```
-
 ___
 
 Se comienza llamando a la función `postsIndexHandler`, la cual retorna un valor del tipo `ExceptT Error AppHandler [Post]`.
@@ -864,8 +862,9 @@ getPosts :: ExceptT Error AppHandler [Post]
 getPosts = lift $ with pg $ query_ "SELECT message,user_id FROM posts"
 ```
 
-La función `getPosts` realiza una query para obtener todos los posts de la base de datos. Utiliza la Snaplet de PostgreSql, y retorna un array de posts como un valor monádico de `AppHandler`, siendo el tipo retornado `AppHandler [Post]` haciendo un lift de dicha mónada a `ExceptT Error AppHandler [Post]`.
+La función `lift $ with pg $ execute "SELECT message,user_id FROM posts"` ejecuta la función `query_` pasando como primer parametro un `String` query. Esta función se ejecuta en el contexto de la `Snaplet` `pg` gracias a la función with, y retorna por resultado `AppHandler [Post]` que es lifteado a `ExceptT Error AppHandler [Post]`.
 
+Todo lo descripto sucede en `postsIndexHandler` que se concatena con `genericHandler`.
 ___
 
 ```haskell
@@ -883,7 +882,13 @@ genericHandler handler = do
 
 `genericHandler` en su declaración de tipos obliga a que el tipo de `a` haya instanciado `ToJSON` debido a que es aquel valor el cual va a ser el body de la respuesta HTTP.
 
-El handler es una mónada que tiene valor monádico `a`. Éste valor a se pasa por parámetro a la función `(\obj -> lift $ writeLBS . encode $ obj)` mediante el operador `(>>=)`.  Al realizar `writeLBS . encode $ obj` estamos codificando en json el objeto (sabemos que el valor monádico ha instanciado `ToJSON`) y lo escribimos en el body de la HTTP response mediante `writeLBS`, ésto tiene tipo `AppHandler ()`, el cual lifteamos para retornar `ExceptT Error AppHandler ()`.
+`genericHandler` puede ser rescrito como:
+
+```haskell
+genericHandler handler = handler >>= (\obj -> lift $ writeLBS . encode $ obj)
+```
+
+El handler es una mónada que tiene valor monádico `a`. Éste valor a se pasa por parámetro a la función `(\obj -> lift $ writeLBS . encode $ obj)` mediante el operador `(>>=)`.  Al realizar `writeLBS . encode $ obj` estamos codificando en JSON el objeto (sabemos que el valor monádico ha instanciado `ToJSON`) y lo escribimos en el body de la HTTP Response mediante `writeLBS`, ésto tiene tipo `AppHandler ()`, el cual lifteamos para retornar `ExceptT Error AppHandler ()`.
 
 ___
 
@@ -937,7 +942,7 @@ headersHandler :: AppHandler () -> AppHandler ()
 headersHandler handler = (modifyResponse $ setHeader "Content-Type" "application/json") >>= (\a -> handler)
 ```
 
-`(modifyResponse $ setHeader "Content-Type" "application/json")` es una función que modifica el contexto modificando el HTTP response seteando el header “Content-Type”, especificando que la respuesta va a contener el formato json, dado a que es una API, y retornando `AppHandler ()`. Mediante el binding éste valor es pasado como parámetro a `(\a -> appHandler)` que lo ignora y retorna handler (de tipo `AppHandler ()`).
+`(modifyResponse $ setHeader "Content-Type" "application/json")` es una función que modifica el contexto modificando el HTTP Response seteando el header “Content-Type”, especificando que la respuesta va a contener el formato json, dado a que es una API, y retornando `AppHandler ()`. Mediante el binding éste valor es pasado como parámetro a `(\a -> appHandler)` que lo ignora y retorna handler (de tipo `AppHandler ()`).
 
 ___
 
@@ -951,7 +956,7 @@ method GET $ headersHandler $ runHandler $ genericHandler $ handler
 method :: MonadSnap m => Method -> m a -> m a
 ```
 
-`method` pertence al modulo `Snap.Core`, el cual recibe una función de tipo `Method` por primer parámetro y una `MonadSnap` por segundo parámetro. `method` ejecuta la `MonadSnap` si el método de la request HTTP coincide con el método pasado como argumento, en éste caso el método GET. Ésta información la consigue accediendo al contexto que nos provee `Snap`, que provee toda la información sobre el HTTP Request y HTTP Response.
+`method` pertenece al modulo `Snap.Core`, el cual recibe una función de tipo `Method` por primer parámetro y una `MonadSnap` por segundo parámetro. `method` ejecuta la `MonadSnap` si el método de la HTTP Request coincide con el método pasado como argumento, en éste caso el método GET. Ésta información la consigue accediendo al contexto que nos provee `Snap`, que provee toda la información sobre el HTTP Request y HTTP Response.
 
 Podemos ver por el tipo de `method` que nuestro handler (`headersHandler $ runHandler $ genericHandler $ handler`) es instancia de `MonadSnap`. `MonadSnap` es el equivalente de `MonadIO` para `IO`, por lo que nos permite extender la funcionalidad accediendo a la monada `Snap` cuando queramos.
 
@@ -981,7 +986,7 @@ routes = [
 
 Todo handler está en el array que es retornado por la función constante `routes`.
 
-#### GET/postsWithUser
+#### GET /postsWithUser
 
 ```haskell
 "/postsWithUser", method GET $ headersHandler $ runHandler $ genericHandler $ postsWitUserIndexHandler
@@ -1012,7 +1017,7 @@ getPostsWithUser :: ExceptT Error AppHandler [PostWithUser]
 getPostsWithUser = getPosts >>= (\posts -> concatAppHandlerList $ postsToPostsWithUser posts)
 ```
 
-`getPosts` es una función que ya se explicó previamente, la cual retorna `ExceptT Error AppHandler [Post]`. Luego el operador bind (>>=) toma la monada retornada por la función `ExceptT Error AppHandler [Post]` y le pasa el valor monádico `[Post]` a función (\posts -> concatAppHandlerList $ postsToPostsWithUser posts).
+`getPosts` es una función que ya se explicó previamente, la cual retorna `ExceptT Error AppHandler [Post]`. Luego el operador bind (>>=) toma la monada retornada por la función `ExceptT Error AppHandler [Post]` y le pasa el valor monádico `[Post]` a función `(\posts -> concatAppHandlerList $ postsToPostsWithUser posts)`.
 
 `postsToPostsWithUser` es una función que recibe un array de `Post` y retorna `[ExceptT Error AppHandler PostWithUser]` (un array de elementos del tipo `ExceptT Error AppHandler PostWithUser`).
 
@@ -1039,7 +1044,7 @@ postToPostWithUser :: Post -> ExceptT Error AppHandler PostWithUser
 postToPostWithUser post = (getUserById $ show $ user_id post) >>= (\user -> lift $ return $ createPostWithUser post user)
 ```
 
-`(getUserById $ show $ user_id post)` es una función que primero con `(user_id post)` obtiene el `user_id` del post en cuestión, luego con la función `show` se convierte el `user_id` de `Int` a `String`, y por último se le envía dicho `String` como argumento a la función `getuserById`, la cual retorna `ExceptT Error AppHandler User`. Mediante el binding, éste valor se le pasa a la función `(\user -> lift $ return $ createPostWithUser post user)`, la cual utiliza el valor monádico de aquél valor, siendo éste el `User`.
+`(getUserById $ show $ user_id post)` es una función que primero con `(user_id post)` obtiene el `user_id` del `Post` en cuestión, luego con la función `show` se convierte el `user_id` de `Int` a `String`, y por último se le envía dicho `String` como argumento a la función `getuserById`, la cual retorna `ExceptT Error AppHandler User`. Mediante el binding, éste valor se le pasa a la función `(\user -> lift $ return $ createPostWithUser post user)`, la cual utiliza el valor monádico de aquél valor, siendo éste el `User`.
 
 La función `(\user -> lift $ return $ createPostWithUser post user)` lo que hace es llamar con el `post` recibido por argumento y el `user` ya mencionado a la función `createPostWithUser`, la cual retorna `PostWithUser`.
 
@@ -1049,6 +1054,19 @@ createPostWithUser post user = PostWithUser post user
 ```
 
 Ahora sí, volviendo a la función `getPostsWithUser`, se le pasa como argumento el resultado de `postsToPostsWithUser posts` (siendo éste `[ExceptT Error AppHandler PostWithUser]`) a la función `concatAppHandlerList`, que se encarga de pasar a `ExceptT Error AppHandler [PostWithUser]`.
+
+```haskell
+concatAppHandlerList :: Monad m => [m a] -> m [a]
+concatAppHandlerList = foldr (\x xs -> concatAppHandler x xs) (return [])
+```
+
+La única función de `concatAppHandlerList` es aplicar `concatAppHandler` a todo elemento de `[m a]` de manera tal que el valor monádico pueda ser agregado a una lista y al final obtengamos `m [a]`.
+
+```haskell
+concatAppHandler :: Monad m => m a -> m [a] -> m [a]
+concatAppHandler m1 m2 = m1 >>= (\x -> m2 >>= (\xs -> return $ x:xs))
+```
+`concatAppHandler` toma dos monadas, una con un elemento por valor moándico y otra con una lista por valor monádico, y mediante el operador `>>=` obtiene sus valores monádicos. Luego concatena ambos y wrapea el resultado en su contexto, retornado una monada.
 
 ___
 
@@ -1060,7 +1078,7 @@ Luego sigue la concatenación de handlers como ya se explicó previamente.
 "/users", method GET $ headersHandler $ runHandler $ genericHandler $ usersIndexHandler
 ```
 
-Se comienza llamando a la función `usersIndexHandler`, la cual no recibe ningún parámtero de entrada y retorna un valor del tipo `ExceptT Error AppHandler [User]`. Ésta función lo único que hace es llamar a la función `getUsers`.
+Se comienza llamando a la función `usersIndexHandler`, la cual no recibe ningún parámetro de entrada y retorna un valor del tipo `ExceptT Error AppHandler [User]`. Ésta función lo único que hace es llamar a la función `getUsers`.
 
 ```haskell
 usersIndexHandler :: ExceptT Error AppHandler [User]
