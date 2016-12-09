@@ -10,35 +10,35 @@
 
 ### Contenido
 
-- [Introducción](#)
-- [Uso de la API](#)
-- [Esquema de la base de datos y modelos](#)
-    - [Users](#)
-	- [Posts](#)
-	- [Relationships](#)
-	- [Modelos en código](#)
-- [Snap](#)
-- [Conceptos claves](#)
-	- [Functors](#)
-	- [Applicative functors](#)
-	- [Monad](#)
-	- [Monad Transformers](#)
-- [Análisis del proyecto](#)
-	- [GET /posts](#)
-	- [GET/postsWithUser](#)
-	- [GET /users](#)
-	- [GET /user/:id](#)
-	- [GET feed/:id](#)
-	- [POST /post](#)
-	- [POST /follow](#)
-	- [DELETE /user/:id](#)
-	- [POST /signup](#)
-- [Inicialización del servidor](#)
-- [Estado de la Snaplet](#)
-- [Manejo de errores](#)
-- [Conclusiones](#)
-- [Posibles futuras mejoras](#)
-- [Bibliografía](#)
+- [Introducción](#introducción)
+- [Uso de la API](#uso-de-la-api)
+- [Esquema de la base de datos y modelos](#esquema-de-la-base-de-datos-y-modelos)
+    - [Users](#users)
+	- [Posts](#posts)
+	- [Relationships](#relationships)
+	- [Modelos en código](#modelos-en-código)
+- [Snap](#snap)
+- [Conceptos claves](#conceptos-claves)
+	- [Functors](#functors)
+	- [Applicative functors](#applicative-functors)
+	- [Monad](#monad)
+	- [Monad Transformers](#monad-transformers)
+- [Análisis del proyecto](#análisis-del-proyecto)
+	- [GET /posts](#get-posts-1)
+	- [GET /postsWithUser](#get-postswithuser-1)
+	- [GET /users](#get-users)
+	- [GET /user/:id](#get-userid-1)
+	- [GET /feed/:id](#get-feedid-1)
+	- [POST /post](#post-post-1)
+	- [POST /follow](#post-follow-1)
+	- [DELETE /user/:id](#delete-userid-1)
+	- [POST /signup](#post-signup-1)
+- [Inicialización del servidor](#inicialización-del-servidor)
+- [Estado de la Snaplet](#estado-de-la-snaplet)
+- [Manejo de errores](#manejo-de-errores)
+- [Conclusiones](#conclusiones)
+- [Posibles futuras mejoras](#posibles-futuras-mejoras)
+- [Bibliografía](#bibliografía)
 
 # Introducción
 
@@ -1795,7 +1795,7 @@ Este endpoint ya ha sido explicado anteriormente, pero lo que cabe destacar entr
 
 Se puede acceder a [este](https://github.com/lkania/Haskitter/tree/2a4664c0e82e77d4199dcc5b32f9ee4e2dc185b8/src) link en caso de querer leer el código antes de que fuera reescrito en su totalidad para utilizar el nuevo sistema de manejo de errores.
 
-### Conclusión
+### Conclusiones
 
 Luego de un año de trabajo con el framework Snap, podemos decir que el mismo tiene ciertas desventajas las cuales sufrimos a lo largo del desarrollo, como por ejemplo la falta de mantenimiento por parte de los creadores y su falta de documentación. Sin embargo, de los frameworks para desarrollo web basados en Haskell (existen otros como Yesod y Happstack) es el que más permite utilizar Haskell puro y sin muchos tipos pertenecientes al framework. Esta cualidad es la que nos permitió ganar un gran entendimiento de `Functors`, `Applicative functors`, `Monad` y `Monad Transformers`. Sobre todo los últimos dos conceptos se ven muy bien reflejados en el desarrollo web debido a todos los cambios de contexto que suceden entre la base de datos, las funciones puras y el procesamiento de las HTTP Request y Response.
 
@@ -1803,8 +1803,8 @@ Por último consideramos al manejo de errores que no interrumpe la ejecución no
 
 ### Posibles futuras mejoras
 
-- Que en caso de error la API retorne distintos _status codes_.
-- Autenticación por header en lugar de enviar siempre usuario y contraseña.
+- En caso de error la API podría retorne distintos _status codes_.
+- Autenticación por header en lugar de enviar utilizar siempre usuario y contraseña.
 - Encriptación de la contraseña a nivel base de datos.
 - Validación de los posibles errores de base de datos.
 
